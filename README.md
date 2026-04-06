@@ -195,6 +195,8 @@ claude
 | Copy file into container | `docker cp ./file.txt docker-claude:/workspace/` |
 | Copy file out of container | `docker cp docker-claude:/workspace/file.txt ./` |
 | View all commands | `make help` |
+| Install plugins | `make install-plugins` |
+| Sync plugins | `make sync-plugins` |
 
 ## Makefile Commands
 
@@ -228,6 +230,11 @@ make health             # Check all runtimes, auth, Docker socket
 make status             # Show containers, volumes, image sizes
 make logs               # Follow docker-claude logs
 make logs-all           # Follow all service logs
+
+# Plugin Management
+make install-plugins   # Register marketplace and sync plugin content
+make sync-plugins     # Manually trigger plugin content sync from marketplace
+make reset-plugins    # Clear stale plugin state for re-sync on next start
 
 # Cleanup
 make clean              # Remove containers + images (volumes persist)

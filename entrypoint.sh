@@ -153,13 +153,15 @@ sync_plugin_content() {
                 fixed=$((fixed + 1))
             else
                 # Plugin name might differ from marketplace directory — try all subdirs
+                # INCLUDING the nested plugins/ subdirectory
                 local found=0
-                for src_dir in "$marketplace"/*/; do
+                for src_dir in "$marketplace"/*/ "$marketplace/plugins"/*/ 2>/dev/null; do
+                    [ -d "$src_dir" ] || continue
                     local src_name
                     src_name=$(basename "$src_dir")
-                    # Check if this marketplace dir looks like it matches (same name or contains matching plugin metadata)
+                    # Check if this marketplace dir matches (same name OR contains matching plugin in plugin.json)
                     if [ "$src_name" = "$plugin_name" ] || \
-                       grep -ql "$plugin_name" "$src_dir"plugin.json 2>/dev/null; then
+                       grep -ql "$plugin_name" "$src_dir/plugin.json" 2>/dev/null; then
                         cp -rn "$src_dir." "$plugin_dir/" 2>/dev/null && \
                             echo -e "    ${GREEN}✓${NC} Synced content: ${plugin_name} (from ${src_name})" && \
                             found=1 && break

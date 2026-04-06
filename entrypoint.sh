@@ -114,10 +114,86 @@ else
 fi
 
 # -- Claude Code Marketplace --
+sync_plugin_content() {
+    local marketplace="/etc/claude-code/marketplace"
+    local plugins_dir="/home/dev/.claude/plugins"
+    local installed_json="$plugins_dir/installed_plugins.json"
+
+    # Need marketplace mounted and installed plugins metadata
+    [ -d "$marketplace" ] || return 0
+    [ -f "$installed_json" ] || return 0
+
+    # Extract installed plugin names (keys of the JSON object)
+    local plugin_names
+    plugin_names=$(grep -oP '"([^"]+)"\s*:' "$installed_json" 2>/dev/null | grep -oP '"[^"]+"' | tr -d '"' | grep -v '^\s*$' || true)
+    [ -n "$plugin_names" ] || return 0
+
+    local fixed=0 ok=0
+    for plugin_name in $plugin_names; do
+        local plugin_dir="$plugins_dir/$plugin_name"
+        [ -d "$plugin_dir" ] || continue
+
+        # Check if directory has actual files (not just empty)
+        if [ -z "$(ls -A "$plugin_dir" 2>/dev/null)" ]; then
+            # Directory exists but is empty — find the source in marketplace
+            if [ -d "$marketplace/$plugin_name" ]; then
+                cp -rn "$marketplace/$plugin_name/." "$plugin_dir/" 2>/dev/null && \
+                    echo -e "    ${GREEN}✓${NC} Synced content: ${plugin_name}" || \
+                    echo -e "    ${RED}✗${NC} Failed to sync: ${plugin_name}"
+                fixed=$((fixed + 1))
+            else
+                # Plugin name might differ from marketplace directory — try all subdirs
+                local found=0
+                for src_dir in "$marketplace"/*/; do
+                    local src_name
+                    src_name=$(basename "$src_dir")
+                    # Check if this marketplace dir looks like it matches (same name or contains matching plugin metadata)
+                    if [ "$src_name" = "$plugin_name" ] || \
+                       grep -ql "$plugin_name" "$src_dir"plugin.json 2>/dev/null; then
+                        cp -rn "$src_dir." "$plugin_dir/" 2>/dev/null && \
+                            echo -e "    ${GREEN}✓${NC} Synced content: ${plugin_name} (from ${src_name})" && \
+                            found=1 && break
+                    fi
+                done
+                if [ "$found" -eq 0 ]; then
+                    echo -e "    ${RED}✗${NC} No source found in marketplace for: ${plugin_name}"
+                else
+                    fixed=$((fixed + 1))
+                fi
+            fi
+        else
+            ok=$((ok + 1))
+        fi
+    done
+
+    # Print summary if any work was done
+    if [ "$fixed" -gt 0 ]; then
+        echo -e "    ${GREEN}→${NC} Synced ${fixed} plugin(s), ${ok} already OK"
+    fi
+
+    # Warn about any empty plugin directories
+    for plugin_name in $plugin_names; do
+        local plugin_dir="$plugins_dir/$plugin_name"
+        if [ -d "$plugin_dir" ] && [ -z "$(ls -A "$plugin_dir" 2>/dev/null)" ]; then
+            echo -e "    ${YELLOW}!${NC} Plugin still empty: ${plugin_name}"
+            echo -e "      Run: ${BLUE}make reset-plugins && make down && make up${NC}"
+        fi
+    done
+}
+
 if [ -d "/etc/claude-code/marketplace" ] && [ "$(ls -A /etc/claude-code/marketplace 2>/dev/null | grep -v .gitkeep)" ]; then
     PLUGIN_COUNT=$(find /etc/claude-code/marketplace -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
     echo -e "${GREEN}✓${NC} Claude Code: Local marketplace mounted (${PLUGIN_COUNT} plugin(s))"
-    echo -e "    Register with: ${BLUE}claude plugin marketplace add /etc/claude-code/marketplace${NC}"
+
+    # Check installed plugins and their content status
+    INSTALLED_JSON="/home/dev/.claude/plugins/installed_plugins.json"
+    if [ -f "$INSTALLED_JSON" ]; then
+        INSTALLED_COUNT=$(grep -oP '"([^"]+)"\s*:' "$INSTALLED_JSON" 2>/dev/null | grep -oP '"[^"]+"' | tr -d '"' | grep -v '^\s*$' | wc -l | tr -d ' ')
+        echo -e "    ${INSTALLED_COUNT} plugin(s) installed"
+        sync_plugin_content
+    else
+        echo -e "    Register with: ${BLUE}claude plugin marketplace add /etc/claude-code/marketplace${NC}"
+    fi
 else
     echo -e "${YELLOW}!${NC} Claude Code: No local marketplace mounted"
 fi

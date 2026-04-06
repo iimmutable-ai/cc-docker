@@ -6,7 +6,7 @@
 .PHONY: help build build-slim build-all up down restart shell claude login \
         solana-up mobile-up status logs clean nuke health \
         backup restore backup-list backup-clean backup-enc restore-enc \
-        install-plugins reset-plugins
+        install-plugins reset-plugins sync-plugins
 
 # Detect OS for compose file selection
 ifeq ($(OS),Windows_NT)
@@ -125,8 +125,11 @@ claude: ## Launch Claude Code CLI
 login: ## Run Claude OAuth login
 	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && claude login'
 
-install-plugins: ## Register marketplace and list installed plugins
-	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && claude plugin marketplace add /etc/claude-code/marketplace 2>/dev/null; claude plugin list'
+install-plugins: ## Register marketplace and sync plugin content
+	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && claude plugin marketplace add /etc/claude-code/marketplace 2>/dev/null; claude plugin sync 2>/dev/null || /entrypoint.sh --sync-plugins; claude plugin list'
+
+sync-plugins: ## Manually trigger plugin content sync from marketplace
+	$(COMPOSE) exec docker-claude bash -c 'source /entrypoint.sh; sync_plugin_content'
 
 reset-plugins: ## Clear stale plugin state for re-sync on next start
 	$(COMPOSE) exec docker-claude bash -c 'rm -rf ~/.claude/plugins/agentic-* ~/.claude/plugins/superpowers 2>/dev/null; echo "Plugin state cleared. Restart to re-sync: make down && make up"'

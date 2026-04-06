@@ -6,6 +6,12 @@
 
 set -e
 
+# -- Command-line flags --
+if [ "$1" = "--sync-plugins" ]; then
+    sync_plugin_content
+    exit 0
+fi
+
 # -- Colors for output --
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -131,7 +137,11 @@ sync_plugin_content() {
     local fixed=0 ok=0
     for plugin_name in $plugin_names; do
         local plugin_dir="$plugins_dir/$plugin_name"
-        [ -d "$plugin_dir" ] || continue
+        # Create directory if it doesn't exist
+        if [ ! -d "$plugin_dir" ]; then
+            mkdir -p "$plugin_dir"
+            echo -e "    Created plugin directory: ${plugin_name}"
+        fi
 
         # Check if directory has actual files (not just empty)
         if [ -z "$(ls -A "$plugin_dir" 2>/dev/null)" ]; then

@@ -71,5 +71,23 @@ if [ -f /usr/share/bash-completion/bash_completion ]; then
     . /usr/share/bash-completion/bash_completion
 fi
 
+# -- Auto-fix permissions for files copied via docker cp --
+_fix_permissions() {
+    local fixed=0
+    # Fix /workspace files owned by root
+    while IFS= read -r item; do
+        [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null && fixed=$((fixed + 1))
+    done < <(find /workspace -user root 2>/dev/null)
+    # Fix /home/dev files owned by root
+    while IFS= read -r item; do
+        [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null && fixed=$((fixed + 1))
+    done < <(find /home/dev -user root 2>/dev/null)
+    # Make everything readable
+    chmod -R a+rX /workspace /home/dev 2>/dev/null
+    [ $fixed -gt 0 ] && echo "Fixed ownership of $fixed root-owned item(s)"
+}
+_fix_permissions
+unset -f _fix_permissions
+
 # -- Workspace shortcut --
 cd /workspace 2>/dev/null || true

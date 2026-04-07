@@ -32,6 +32,7 @@ if [ "$(id -u)" = "0" ]; then
         # Fix files owned by common host UIDs (501, 502) or with no owner
         if [ "$uid" = "501" ] || [ "$uid" = "502" ] || [ "$uid" = "" ]; then
             chown -h dev:dev "$item" 2>/dev/null || true
+            chmod -h u+rw "$item" 2>/dev/null || true
         fi
     done
 
@@ -43,6 +44,7 @@ if [ "$(id -u)" = "0" ]; then
         uid=$(stat -c "%u" "$item" 2>/dev/null || echo "")
         if [ "$uid" = "501" ] || [ "$uid" = "502" ] || [ "$uid" = "" ]; then
             chown -h dev:dev "$item" 2>/dev/null || true
+            chmod -h u+rw "$item" 2>/dev/null || true
         fi
     done
     find /home/dev -nouser 2>/dev/null -exec chown -h dev:dev {} \; || true

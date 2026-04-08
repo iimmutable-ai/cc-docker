@@ -31,13 +31,15 @@ if [ "$(id -u)" = "0" ]; then
         [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null || true
     done
     # Ensure read access for all users (fixes 600 permissions from macOS)
-    find /workspace -not -user dev -exec chmod -h a+rX {} \; 2>/dev/null || true
+    # Run on ALL files - not just non-dev owned (which would find nothing after chown)
+    chmod -R a+rX /workspace 2>/dev/null || true
 
     # Fix home directory if needed
     find /home/dev -not -user dev 2>/dev/null | while read item; do
         [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null || true
     done
-    find /home/dev -not -user dev -exec chmod -h a+rX {} \; 2>/dev/null || true
+    # Run on ALL files in home directory
+    chmod -R a+rX /home/dev 2>/dev/null || true
 
     echo -e "${GREEN}✓${NC} Ownership fixed"
 

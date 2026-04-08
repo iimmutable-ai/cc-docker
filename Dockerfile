@@ -229,6 +229,12 @@ RUN existing_user=$(getent passwd ${DEV_UID} | cut -d: -f1) \
     && chown -R ${DEV_USER}:${DEV_USER} /workspace /home/${DEV_USER}
 
 # =============================================================================
+# Configure passwordless sudo for permission fixes
+# =============================================================================
+COPY config/sudoers-dev /etc/sudoers.d/dev
+RUN chmod 0440 /etc/sudoers.d/dev
+
+# =============================================================================
 # Configure PATH
 # =============================================================================
 ENV PATH=/usr/local/cargo/bin:/usr/local/go/bin:/home/${DEV_USER}/go/bin:/usr/local/dotnet:$PATH

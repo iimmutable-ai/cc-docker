@@ -71,23 +71,26 @@ if [ -f /usr/share/bash-completion/bash_completion ]; then
     . /usr/share/bash-completion/bash_completion
 fi
 
-# -- Auto-fix permissions for files copied via docker cp --
-_fix_permissions() {
-    local fixed=0
-    # Fix /workspace files not owned by dev (handles root, UID 501, 502, etc.)
-    while IFS= read -r item; do
-        [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null && fixed=$((fixed + 1))
-    done < <(find /workspace -not -user dev 2>/dev/null)
-    # Fix /home/dev files not owned by dev
-    while IFS= read -r item; do
-        [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null && fixed=$((fixed + 1))
-    done < <(find /home/dev -not -user dev 2>/dev/null)
-    # Make everything readable as backup
-    chmod -R a+rX /workspace /home/dev 2>/dev/null
-    [ $fixed -gt 0 ] && echo "Fixed ownership of $fixed item(s)"
+# -- Auto-fix permissions before each prompt --
+# This catches files copied via docker cp while shell is active
+PROMPT_COMMAND='_quick_fix_permissions'
+_quick_fix_permissions() {
+    # Quick check - only run full fix if there are non-dev owned files
+    # Using -print -quit for efficiency (stops after first match)
+    if sudo find /workspace -maxdepth 2 -not -user dev -print -quit 2>/dev/null | grep -q .; then
+        sudo find /workspace -not -user dev 2>/dev/null | while IFS= read -r item; do
+            [ -e "$item" ] && sudo chown -h dev:dev "$item" 2>/dev/null
+        done
+        sudo find /home/dev -not -user dev 2>/dev/null | while IFS= read -r item; do
+            [ -e "$item" ] && sudo chown -h dev:dev "$item" 2>/dev/null
+        done
+        # Make everything readable (handles 600 permissions from macOS)
+        sudo chmod -R a+rX /workspace /home/dev 2>/dev/null
+    fi
 }
-_fix_permissions
-unset -f _fix_permissions
+
+# -- Initial fix on shell start (runs once) --
+_quick_fix_permissions
 
 # -- Workspace shortcut --
 cd /workspace 2>/dev/null || true

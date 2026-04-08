@@ -20,6 +20,7 @@ ARG INCLUDE_NODE=true
 ARG INCLUDE_DOTNET=true
 ARG INCLUDE_GOLANG=true
 ARG INCLUDE_RUST=true
+ARG INCLUDE_BROWSER=true
 ARG INCLUDE_GPU=false
 ARG GO_VERSION=1.23.4
 ARG DEV_UID=1000
@@ -53,6 +54,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo \
     && locale-gen en_US.UTF-8 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# =============================================================================
+# Browser dependencies (Chromium / Playwright / noVNC) — conditional
+# =============================================================================
+RUN if [ "${INCLUDE_BROWSER}" = "true" ]; then \
+      apt-get update \
+      && apt-get install -y --no-install-recommends \
+         libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+         libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+         libgbm1 libasound2 libpango-1.0-0 libcairo2 libatspi2.0-0 \
+         xvfb x11vnc websockify novnc \
+      && apt-get clean && rm -rf /var/lib/apt/lists/* \
+      && echo ">>> Browser dependencies installed"; \
+    else \
+      echo ">>> Skipping browser dependencies"; \
+    fi
 
 # =============================================================================
 # Docker CLI + Compose plugin (for DinD via socket mount)
@@ -167,6 +184,20 @@ RUN if [ -s "$NVM_DIR/nvm.sh" ]; then \
     fi
 
 # =============================================================================
+# Playwright + Chromium — conditional (requires Node.js)
+# =============================================================================
+RUN if [ "${INCLUDE_BROWSER}" = "true" ] && [ -s "$NVM_DIR/nvm.sh" ]; then \
+      . $NVM_DIR/nvm.sh \
+      && npm install -g playwright \
+      && npx playwright install --with-deps chromium \
+      && echo ">>> Playwright + Chromium installed"; \
+    elif [ "${INCLUDE_BROWSER}" = "true" ]; then \
+      echo ">>> Playwright requires Node.js — skipped"; \
+    else \
+      echo ">>> Skipping Playwright"; \
+    fi
+
+# =============================================================================
 # Terminal Tools: Yazi, Lazygit, Starship
 # =============================================================================
 ARG YAZI_VERSION=26.1.22
@@ -245,12 +276,13 @@ ENV PATH=/usr/local/cargo/bin:/usr/local/go/bin:/home/${DEV_USER}/go/bin:/usr/lo
 COPY config/.bashrc /home/${DEV_USER}/.bashrc
 COPY config/starship.toml /home/${DEV_USER}/.config/starship.toml
 COPY config/.gitattributes /workspace/.gitattributes
+COPY config/novnc-startup.sh /usr/local/bin/novnc-startup
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod 755 /usr/local/bin/entrypoint.sh \
+RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/novnc-startup \
     && chown ${DEV_USER}:${DEV_USER} /home/${DEV_USER}/.bashrc \
     && chown ${DEV_USER}:${DEV_USER} /home/${DEV_USER}/.config/starship.toml \
-    && dos2unix /usr/local/bin/entrypoint.sh 2>/dev/null \
-    || (sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod 755 /usr/local/bin/entrypoint.sh)
+    && dos2unix /usr/local/bin/entrypoint.sh /usr/local/bin/novnc-startup 2>/dev/null \
+    || (sed -i 's/\r$//' /usr/local/bin/entrypoint.sh /usr/local/bin/novnc-startup && chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/novnc-startup)
 
 # =============================================================================
 # Finalize
@@ -258,8 +290,8 @@ RUN chmod 755 /usr/local/bin/entrypoint.sh \
 VOLUME ["/workspace"]
 WORKDIR /workspace
 
-# Node/Vite/React: 3000, 5173 | ASP.NET: 5000, 5001 | Go/Generic: 8080 | Vue: 8081
-EXPOSE 3000 5000 5001 5173 8080 8081
+# Node/Vite/React: 3000, 5173 | ASP.NET: 5000, 5001 | Go/Generic: 8080 | Vue: 8081 | noVNC: 6080
+EXPOSE 3000 5000 5001 5173 6080 8080 8081
 
 # NOTE: Container starts as root to fix ownership of host-copied files,
 # then entrypoint drops privileges to dev user before executing commands.

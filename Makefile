@@ -6,7 +6,8 @@
 .PHONY: help build build-slim build-all up down restart shell claude login \
         solana-up mobile-up status logs clean nuke health \
         backup restore backup-list backup-clean backup-enc restore-enc \
-        install-plugins reset-plugins sync-plugins
+        install-plugins reset-plugins sync-plugins \
+        browser browser-start browser-stop browser-test browser-screenshot
 
 # Detect OS for compose file selection
 ifeq ($(OS),Windows_NT)
@@ -72,6 +73,7 @@ build: ## Build core image (all stacks)
 		--build-arg INCLUDE_DOTNET=true \
 		--build-arg INCLUDE_GOLANG=true \
 		--build-arg INCLUDE_RUST=true \
+		--build-arg INCLUDE_BROWSER=true \
 		--build-arg INCLUDE_GPU=$(GPU) \
 		docker-claude
 
@@ -81,6 +83,7 @@ build-slim: ## Build slim image (Node + Go only)
 		--build-arg INCLUDE_DOTNET=false \
 		--build-arg INCLUDE_GOLANG=true \
 		--build-arg INCLUDE_RUST=false \
+		--build-arg INCLUDE_BROWSER=false \
 		--build-arg INCLUDE_GPU=false \
 		docker-claude
 
@@ -134,6 +137,28 @@ sync-plugins: ## Manually trigger plugin content sync from marketplace
 reset-plugins: ## Clear stale plugin state for re-sync on next start
 	$(COMPOSE) exec docker-claude bash -c 'rm -rf ~/.claude/plugins/agentic-* ~/.claude/plugins/superpowers 2>/dev/null; echo "Plugin state cleared. Restart to re-sync: make down && make up"'
 
+# =============================================================================
+# Browser (noVNC + Playwright)
+# =============================================================================
+
+browser: ## Open noVNC visual browser in host browser
+	@echo "Opening noVNC at http://localhost:41608/vnc.html"
+	@open http://localhost:41608/vnc.html 2>/dev/null || \
+		xdg-open http://localhost:41608/vnc.html 2>/dev/null || \
+		echo "Open manually: http://localhost:41608/vnc.html"
+
+browser-start: ## Start noVNC visual browser inside container
+	$(COMPOSE) exec -d docker-claude bash -c 'novnc-startup 2>&1 | tee /tmp/novnc.log'
+
+browser-stop: ## Stop visual browser processes
+	$(COMPOSE) exec docker-claude novnc-startup stop
+
+browser-test: ## Run Playwright tests (usage: make browser-test TEST=path/to/test)
+	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && npx playwright test $(TEST)'
+
+browser-screenshot: ## Take a Playwright screenshot (usage: make browser-screenshot URL=https://example.com)
+	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && npx playwright screenshot --browser=chromium $(URL) /tmp/screenshot.png && echo "Screenshot saved to /tmp/screenshot.png"'
+
 shell-solana: ## Open shell in Solana container
 	$(COMPOSE) --profile solana exec -u dev docker-claude-solana bash
 
@@ -182,6 +207,7 @@ health: ## Run health check on all installed runtimes
 		echo -n "Docker:   " && (docker --version 2>/dev/null || echo "NOT AVAILABLE") && \
 		echo -n "Git:      " && (git --version 2>/dev/null || echo "NOT INSTALLED") && \
 		echo -n "Claude:   " && (claude --version 2>/dev/null || echo "NOT INSTALLED") && \
+		echo -n "Browser:  " && (. /usr/local/nvm/nvm.sh 2>/dev/null && npx playwright --version 2>/dev/null || echo "NOT INSTALLED") && \
 		echo -n "Solana:   " && (solana --version 2>/dev/null || echo "NOT INSTALLED") && \
 		echo -n "Flutter:  " && (flutter --version 2>/dev/null | head -1 || echo "NOT INSTALLED") && \
 		echo "" && \

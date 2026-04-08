@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Dockerized development environment running Claude Code CLI inside Docker. Provides Node.js, .NET, Go, Rust runtimes with optional Solana and Mobile profiles. Named volumes store code and auth persistently.
+Dockerized development environment running Claude Code CLI inside Docker. Provides Node.js, .NET, Go, Rust runtimes with built-in browser (Playwright + Chromium + noVNC), and optional Solana and Mobile profiles. Named volumes store code and auth persistently.
 
 ## Commands
 
@@ -27,6 +27,12 @@ make login              # Run Claude OAuth login flow
 make shell-solana       # Shell in Solana container
 make shell-mobile       # Shell in Mobile container
 
+make browser            # Open noVNC visual browser in host browser
+make browser-start      # Start noVNC visual browser inside container
+make browser-stop       # Stop visual browser processes
+make browser-test TEST= # Run Playwright tests
+make browser-screenshot URL= # Take a Playwright screenshot
+
 make health             # Verify all runtimes, auth, Docker socket
 make status             # Show containers, volumes, image sizes
 
@@ -48,6 +54,8 @@ ARG INCLUDE_NODE=true
 ARG INCLUDE_DOTNET=true
 ARG INCLUDE_GOLANG=true
 ARG INCLUDE_RUST=true
+ARG INCLUDE_BROWSER=true
+ARG INCLUDE_GPU=false
 ```
 
 Each runtime block checks its arg before installing. This allows slim builds via:
@@ -80,6 +88,7 @@ All host ports use 41xxx offset to avoid conflicts:
 - Container 3000 → Host 41300 (React/Express)
 - Container 5173 → Host 41517 (Vite)
 - Container 8080 → Host 41808 (Go/Generic)
+- Container 6080 → Host 41608 (noVNC visual browser)
 
 Map defined in docker-compose.yml `ports:` section.
 
@@ -105,6 +114,8 @@ All shells must source NVM first for Node commands:
 | `Makefile` | Primary interface — all commands via `make` |
 | `entrypoint.sh` | Container startup: runtime init, auth check |
 | `config/.bashrc` | Shell config inside container (aliases, PATH) |
+| `config/novnc-startup.sh` | noVNC startup script for visual browser |
+| `config/starship.toml` | Starship prompt config (Catppuccin Powerline) |
 | `devcontainer.json` | VS Code Dev Container integration |
 | `Dockerfile.solana` | Solana profile (extends base) |
 | `Dockerfile.mobile` | Mobile profile (Android + Flutter + RN) |

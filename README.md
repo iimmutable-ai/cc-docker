@@ -23,8 +23,10 @@ A fully virtualized, cross-platform development environment running Claude Code 
 │  + .NET 8 & 9 SDK                          (INCLUDE_DOTNET)  │
 │  + Go 1.23 + gopls + delve                 (INCLUDE_GOLANG)  │
 │  + rustup + stable + rust-analyzer/clippy  (INCLUDE_RUST)    │
-│  + NVIDIA CUDA 12.4 runtime                (INCLUDE_GPU)     │
+│  + Playwright + Chromium + noVNC/Xvfb      (INCLUDE_BROWSER) │
+│  + NVIDIA CUDA runtime                     (INCLUDE_GPU)     │
 │  + Claude Code CLI + non-root user + SSH/Git                 │
+│  + Yazi + Lazygit + Starship (terminal tools)                │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -141,6 +143,7 @@ API Key: configured            # or: Auth: NOT CONFIGURED
 === Docker Socket ===
 Socket: not mounted (default for security)
 
+Browser:  1.x.x
 Claude Code: Global settings loaded
 Claude Code: Local marketplace mounted (N plugin(s))
 ```
@@ -197,6 +200,11 @@ claude
 | View all commands | `make help` |
 | Install plugins | `make install-plugins` |
 | Sync plugins | `make sync-plugins` |
+| Open visual browser | `make browser` |
+| Start visual browser in container | `make browser-start` |
+| Stop visual browser | `make browser-stop` |
+| Run Playwright tests | `make browser-test TEST=path/to/test` |
+| Take a screenshot | `make browser-screenshot URL=https://example.com` |
 
 ## Makefile Commands
 
@@ -235,6 +243,13 @@ make logs-all           # Follow all service logs
 make install-plugins   # Register marketplace and sync plugin content
 make sync-plugins     # Manually trigger plugin content sync from marketplace
 make reset-plugins    # Clear stale plugin state for re-sync on next start
+
+# Browser (noVNC + Playwright)
+make browser           # Open noVNC visual browser in host browser
+make browser-start     # Start noVNC visual browser inside container
+make browser-stop      # Stop visual browser processes
+make browser-test      # Run Playwright tests (usage: make browser-test TEST=path/to/test)
+make browser-screenshot # Take a Playwright screenshot (usage: make browser-screenshot URL=https://example.com)
 
 # Cleanup
 make clean              # Remove containers + images (volumes persist)
@@ -395,6 +410,7 @@ All host ports use a **41xxx offset** to avoid conflicts with common services (e
 | Expo DevTools | 19001 | 41901 | `localhost:41901` |
 | Android Emulator | 5554 | 41554 | `localhost:41554` |
 | Android ADB | 5555 | 41555 | `localhost:41555` |
+| noVNC (visual browser) | 6080 | 41608 | `localhost:41608` |
 
 ## Working with Projects
 
@@ -713,7 +729,10 @@ docker-claude/
 │   ├── .bashrc                       # Shell config (prompt, aliases, PATH)
 │   ├── .gitattributes                # LF enforcement for cross-platform
 │   ├── claude-settings.json          # Claude Code global settings (mounted into container)
-│   └── claude-project-settings.example.json  # Example per-project settings
+│   ├── claude-project-settings.example.json  # Example per-project settings
+│   ├── novnc-startup.sh              # noVNC startup script for visual browser
+│   ├── starship.toml                 # Starship prompt config (Catppuccin Powerline)
+│   └── sudoers-dev                   # Passwordless sudo config for dev user
 ├── docker-compose.debug.yml          # Debug override (SYS_PTRACE + seccomp)
 ├── docker-compose.dind.yml           # DinD override (Docker socket mount)
 ├── docker-compose.gpu.yml            # GPU override (NVIDIA device passthrough)

@@ -73,7 +73,7 @@ fi
 
 # -- Auto-fix permissions before each prompt --
 # This catches files copied via docker cp while shell is active
-PROMPT_COMMAND='_quick_fix_permissions'
+PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}_quick_fix_permissions"
 _quick_fix_permissions() {
     # Quick check - only run full fix if there are non-dev owned files
     # Using -print -quit for efficiency (stops after first match)

@@ -25,27 +25,21 @@ if [ "$(id -u)" = "0" ]; then
     echo -e "${BLUE}  Docker Claude — Initializing (as root)${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-    # Fix files copied from host (common macOS UIDs: 501, 502)
+    # Fix files copied from host - handle ANY non-dev user (not just 501/502)
     echo -e "${YELLOW}!${NC} Fixing file ownership for host-copied files..."
-    find /workspace -type f -o -type d 2>/dev/null | while read item; do
-        uid=$(stat -c "%u" "$item" 2>/dev/null || echo "")
-        # Fix files owned by common host UIDs (501, 502) or with no owner
-        if [ "$uid" = "501" ] || [ "$uid" = "502" ] || [ "$uid" = "" ]; then
-            chown -h dev:dev "$item" 2>/dev/null || true
-        fi
+    find /workspace -not -user dev 2>/dev/null | while read item; do
+        [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null || true
     done
-
-    # Also fix orphaned files (nouser)
-    find /workspace -nouser 2>/dev/null -exec chown -h dev:dev {} \; || true
+    # Ensure read access for all users (fixes 600 permissions from macOS)
+    # Run on ALL files - not just non-dev owned (which would find nothing after chown)
+    chmod -R a+rX /workspace 2>/dev/null || true
 
     # Fix home directory if needed
-    find /home/dev -type f -o -type d 2>/dev/null | while read item; do
-        uid=$(stat -c "%u" "$item" 2>/dev/null || echo "")
-        if [ "$uid" = "501" ] || [ "$uid" = "502" ] || [ "$uid" = "" ]; then
-            chown -h dev:dev "$item" 2>/dev/null || true
-        fi
+    find /home/dev -not -user dev 2>/dev/null | while read item; do
+        [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null || true
     done
-    find /home/dev -nouser 2>/dev/null -exec chown -h dev:dev {} \; || true
+    # Run on ALL files in home directory
+    chmod -R a+rX /home/dev 2>/dev/null || true
 
     echo -e "${GREEN}✓${NC} Ownership fixed"
 

@@ -714,35 +714,39 @@ git config --global core.autocrlf input
 
 ```
 docker-claude/
-├── .devcontainer/devcontainer.json   # VS Code Dev Container config
-├── .dockerignore                     # Build context exclusions
-├── .env.example                      # Template for environment variables
-├── .gitattributes → config/          # LF line ending enforcement
-├── .gitignore                        # Git exclusions
-├── Dockerfile                        # Core image (conditional runtimes)
-├── Dockerfile.mobile                 # Mobile profile (Android/Flutter/RN)
-├── Dockerfile.solana                 # Solana profile (Solana CLI/Anchor)
-├── Makefile                          # All commands (run: make help)
-├── README.md                         # This file
-├── SECURITY.md                       # Security documentation
+├── .devcontainer/
+│   └── devcontainer.json          # VS Code Dev Container config
+├── .dockerignore                  # Build context exclusions
+├── .env.example                   # Template for environment variables
+├── .gitignore                     # Git exclusions
+├── Dockerfile                     # Core image (conditional runtimes)
+├── Dockerfile.mobile              # Mobile profile (Android/Flutter/RN)
+├── Dockerfile.solana              # Solana profile (Solana CLI/Anchor)
+├── Makefile                       # All commands (run: make help)
+├── README.md                      # This file
+├── SECURITY.md                    # Security documentation
+├── claude-settings.json           # Claude Code global settings (source for config/)
+├── claude-project-settings.example.json  # Example per-project settings
 ├── config/
-│   ├── .bashrc                       # Shell config (prompt, aliases, PATH)
-│   ├── .gitattributes                # LF enforcement for cross-platform
-│   ├── claude-settings.json          # Claude Code global settings (mounted into container)
-│   ├── claude-project-settings.example.json  # Example per-project settings
-│   ├── novnc-startup.sh              # noVNC startup script for visual browser
-│   ├── starship.toml                 # Starship prompt config (Catppuccin Powerline)
-│   └── sudoers-dev                   # Passwordless sudo config for dev user
-├── docker-compose.debug.yml          # Debug override (SYS_PTRACE + seccomp)
-├── docker-compose.dind.yml           # DinD override (Docker socket mount)
-├── docker-compose.gpu.yml            # GPU override (NVIDIA device passthrough)
-├── docker-compose.windows.yml        # Windows-specific overrides
-├── docker-compose.yml                # Main compose (services, volumes, ports)
-├── marketplace/                      # Default (empty) plugin marketplace fallback
+│   ├── .bashrc                    # Shell config (prompt, aliases, PATH)
+│   ├── .gitattributes             # LF enforcement for cross-platform
+│   ├── claude-settings.json       # Claude Code global settings (mounted into container)
+│   ├── novnc-startup.sh           # noVNC startup script for visual browser
+│   ├── starship.toml              # Starship prompt config (Catppuccin Powerline)
+│   └── sudoers-dev                # Passwordless sudo config for dev user
+├── docker-compose.debug.yml       # Debug override (SYS_PTRACE + seccomp)
+├── docker-compose.dind.yml        # DinD override (Docker socket mount)
+├── docker-compose.gpu.yml         # GPU override (NVIDIA device passthrough)
+├── docker-compose.windows.yml     # Windows-specific overrides
+├── docker-compose.yml             # Main compose (services, volumes, ports)
+├── marketplace/                   # Default (empty) plugin marketplace fallback
+│   └── .gitkeep                   # Keeps empty directory in git
+├── plans/                         # Implementation plans and RFCs
+│   └── browser-integration-plan.md
 └── scripts/
-    ├── entrypoint.sh                 # Container startup (runtime init, auth check)
-    ├── setup.ps1                     # One-command setup (Windows)
-    └── setup.sh                      # One-command setup (Mac/Linux)
+    ├── entrypoint.sh              # Container startup (runtime init, auth check)
+    ├── setup.ps1                  # One-command setup (Windows)
+    └── setup.sh                   # One-command setup (Mac/Linux)
 ```
 
 ## License

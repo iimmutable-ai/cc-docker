@@ -63,7 +63,7 @@ RUN if [ "${INCLUDE_BROWSER}" = "true" ]; then \
       && apt-get install -y --no-install-recommends \
          libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
          libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-         libgbm1 libasound2 libpango-1.0-0 libcairo2 libatspi2.0-0 \
+         libgbm1 libasound2t64 libpango-1.0-0 libcairo2 libatspi2.0-0 \
          xvfb x11vnc websockify novnc \
       && apt-get clean && rm -rf /var/lib/apt/lists/* \
       && echo ">>> Browser dependencies installed"; \

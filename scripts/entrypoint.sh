@@ -82,6 +82,17 @@ if [ -d "/usr/local/cargo" ]; then
     echo -e "${GREEN}✓${NC} Rust $(rustc --version 2>/dev/null | awk '{print $2}' || echo 'installed')"
 fi
 
+# -- Browser / Playwright --
+PW_VERSION=$(npx playwright --version 2>/dev/null | awk '{print $3}')
+if [ -n "$PW_VERSION" ]; then
+    echo -e "${GREEN}✓${NC} Browser ${PW_VERSION}"
+    echo -e "    Visual: ${BLUE}novnc-startup${NC} | Headless: ${BLUE}npx playwright <command>${NC}"
+elif command -v novnc-startup &> /dev/null; then
+    echo -e "${GREEN}✓${NC} Browser (noVNC available)"
+else
+    echo -e "${YELLOW}!${NC} Browser not installed (INCLUDE_BROWSER=false)"
+fi
+
 # -- Solana (if available) --
 if [ -d "$HOME/.local/share/solana/install/active_release" ]; then
     export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"

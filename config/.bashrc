@@ -66,6 +66,10 @@ alias dc='docker compose'
 alias ws='cd /workspace'
 alias claude-login='claude login'
 
+# -- Browser (noVNC) --
+alias browser-start='novnc-startup'
+alias browser-stop='novnc-startup stop'
+
 # -- Tab completion --
 if [ -f /usr/share/bash-completion/bash_completion ]; then
     . /usr/share/bash-completion/bash_completion

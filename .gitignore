@@ -1,6 +1,9 @@
 # Environment secrets
 .env
 
+# Volume tracking (per-folder state)
+.volume-state
+
 # OS files
 .DS_Store
 Thumbs.db

@@ -7,15 +7,16 @@ A fully virtualized, cross-platform development environment running Claude Code 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                     Docker Compose                           │
+│                    Project: ${COMPOSE_PROJECT_NAME}          │
 │                                                              │
 │  SERVICES                                                    │
 │  ├── docker-claude          (default)  Core dev environment  │
 │  ├── docker-claude-solana   (profile)  Solana + Anchor       │
 │  └── docker-claude-mobile   (profile)  Android SDK/Flutter/RN│
 │                                                              │
-│  VOLUMES                                                     │
-│  ├── claude-projects  →  /workspace  (code + deps + caches) │
-│  └── claude-auth      →  ~/.claude   (auth persistence)     │
+│  VOLUMES (prefixed by project name)                          │
+│  ├── {project}_vol-projects  →  /workspace  (code+deps)     │
+│  └── {project}_vol-claude-auth → ~/.claude  (auth)          │
 │                                                              │
 │  IMAGE (conditional install via build args)                   │
 │  Ubuntu 24.04 LTS base + Docker CLI + core utils             │
@@ -23,8 +24,10 @@ A fully virtualized, cross-platform development environment running Claude Code 
 │  + .NET 8 & 9 SDK                          (INCLUDE_DOTNET)  │
 │  + Go 1.23 + gopls + delve                 (INCLUDE_GOLANG)  │
 │  + rustup + stable + rust-analyzer/clippy  (INCLUDE_RUST)    │
-│  + NVIDIA CUDA 12.4 runtime                (INCLUDE_GPU)     │
+│  + Playwright + Chromium + noVNC/Xvfb      (INCLUDE_BROWSER) │
+│  + NVIDIA CUDA runtime                     (INCLUDE_GPU)     │
 │  + Claude Code CLI + non-root user + SSH/Git                 │
+│  + Yazi + Lazygit + Starship (terminal tools)                │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -60,6 +63,10 @@ cp .env.example .env
 Edit `.env`:
 
 ```bash
+# Multi-Instance Configuration (REQUIRED for parallel instances)
+COMPOSE_PROJECT_NAME=docker-claude    # Change for each instance (e.g., trial-claude)
+PORT_BASE=41                          # Use 42 for second instance, 43 for third
+
 # Auth (pick one):
 ANTHROPIC_API_KEY=sk-ant-api03-your-key-here   # Option A: API key
 # Or leave empty and run `make login` later     # Option B: OAuth
@@ -85,6 +92,10 @@ CLAUDE_MARKETPLACE_PATH=/path/to/your/marketplace
 
 | Variable | Required | Description |
 |---|---|---|
+| `COMPOSE_PROJECT_NAME` | No* | Docker Compose project name (namespaces containers, volumes, networks). Change for each parallel instance. Default: `docker-claude`. |
+| `PORT_BASE` | No | Port prefix for host bindings. Default: `41` → 41xxx ports. Use `42` for second instance, `43` for third, etc. |
+| `VOLUME_CHECK_MODE` | No | Volume check mode: `interactive` (prompt), `auto-fresh` (create new), `auto-adopt` (copy from source), `skip` (no checks). Default: `interactive`. |
+| `VOLUME_ADOPT_FROM` | No | Source project for auto-adopt mode. Example: `docker-claude`. Only used when `VOLUME_CHECK_MODE=auto-adopt`. |
 | `ANTHROPIC_API_KEY` | No* | API key for headless auth. Leave empty and use `make login` for OAuth. |
 | `ANTHROPIC_BASE_URL` | No | Override the Anthropic API endpoint (e.g. for proxies or local LLM gateways). |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | No | Pin a specific Haiku model version. Leave empty for Claude Code defaults. |
@@ -96,7 +107,7 @@ CLAUDE_MARKETPLACE_PATH=/path/to/your/marketplace
 | `CLAUDE_MARKETPLACE_PATH` | No | Absolute path to a local Claude Code plugin marketplace folder on your host. |
 | `USERPROFILE` | No | Windows only. Set to `%USERPROFILE%` path (e.g. `C:\Users\YourName`). |
 
-*One of `ANTHROPIC_API_KEY` or OAuth (`make login`) is required to use Claude Code.
+*One of `ANTHROPIC_API_KEY` or OAuth (`make login`) is required to use Claude Code. `COMPOSE_PROJECT_NAME` and `PORT_BASE` must be changed when running multiple instances simultaneously.
 <!-- AUTO-GENERATED END -->
 
 ### Step 3 — Build & Start
@@ -141,6 +152,7 @@ API Key: configured            # or: Auth: NOT CONFIGURED
 === Docker Socket ===
 Socket: not mounted (default for security)
 
+Browser:  1.x.x
 Claude Code: Global settings loaded
 Claude Code: Local marketplace mounted (N plugin(s))
 ```
@@ -182,6 +194,7 @@ claude
 
 | What you want to do | Command |
 |---|---|
+| Initialize environment | `make init` |
 | Start the environment | `make up` |
 | Stop the environment | `make down` |
 | Open a shell | `make shell` |
@@ -192,17 +205,163 @@ claude
 | Encrypted backup | `make backup-enc` |
 | Enable Docker-in-Docker | `make DIND=true up` |
 | Enable debugger support | `make DEBUG=true up` |
-| Copy file into container | `docker cp ./file.txt docker-claude:/workspace/` |
-| Copy file out of container | `docker cp docker-claude:/workspace/file.txt ./` |
+| Copy file into container | `docker cp ./file.txt $(docker ps -q -f name=docker-claude):/workspace/` |
+| Copy file out of container | `docker cp $(docker ps -q -f name=docker-claude):/workspace/file.txt ./` |
 | View all commands | `make help` |
 | Install plugins | `make install-plugins` |
 | Sync plugins | `make sync-plugins` |
+| Open visual browser | `make browser` |
+| Start visual browser in container | `make browser-start` |
+| Stop visual browser | `make browser-stop` |
+| Run Playwright tests | `make browser-test TEST=path/to/test` |
+| Take a screenshot | `make browser-screenshot URL=https://example.com` |
+| Check volume status | `make volume-status` |
+| Adopt orphan volumes | `make volume-adopt FROM=docker-claude` |
+
+## Multi-Instance Setup
+
+You can run multiple isolated instances of docker-claude simultaneously. Each instance has its own:
+- **Containers** — separate container names
+- **Volumes** — isolated code and auth storage
+- **Ports** — configurable port range to avoid conflicts
+
+### Volume Name Changes
+
+When you change `COMPOSE_PROJECT_NAME` (e.g., setting up a second instance), Docker Compose creates NEW volumes with the new project prefix. Old volumes from the previous configuration remain as "orphans" — they're not deleted but are no longer associated with your project.
+
+The `make up` command now includes a pre-flight volume check that:
+- Detects if current project volumes exist
+- Finds orphan volumes from other project names
+- Prompts you to choose an action (fresh start, adopt data, or cancel)
+
+### Volume Check Modes
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `interactive` (default) | Prompt user when orphans detected | Normal usage |
+| `auto-fresh` | Always create fresh volumes | CI/CD, automated environments |
+| `auto-adopt` | Auto-adopt from specified project | Migration with known source |
+| `skip` | Skip all checks | Trusted environments |
+
+```bash
+# Interactive mode (default)
+make up
+
+# Auto-fresh — create new volumes without prompting
+VOLUME_CHECK_MODE=auto-fresh make up
+
+# Auto-adopt — copy data from specific project
+VOLUME_ADOPT_FROM=docker-claude make up
+
+# Skip checks — proceed without prompts
+VOLUME_CHECK_MODE=skip make up
+```
+
+### Volume Management Commands
+
+| Command | Description |
+|---|---|
+| `make volume-status` | Show current volumes, orphans, and state file |
+| `make volume-adopt FROM=x` | Adopt volumes from project 'x' |
+| `make volume-check` | Run pre-flight check manually |
+
+### Quick Setup
+
+1. **Copy the project to a new location:**
+   ```bash
+   cp -r /path/to/docker-claude /path/to/trial-claude
+   cd /path/to/trial-claude
+   ```
+
+2. **Create `.env` with unique project name and port base:**
+   ```bash
+   cp .env.example .env
+   # Edit .env:
+   #   COMPOSE_PROJECT_NAME=trial-claude
+   #   PORT_BASE=42
+   ```
+
+3. **Build and start:**
+   ```bash
+   make build
+   make up
+   ```
+
+### How It Works
+
+| Setting | First Instance | Second Instance |
+|---------|---------------|-----------------|
+| `COMPOSE_PROJECT_NAME` | `docker-claude` | `trial-claude` |
+| `PORT_BASE` | `41` | `42` |
+| Container name | `docker-claude-docker-claude-1` | `trial-claude-docker-claude-1` |
+| Project volume | `docker-claude_vol-projects` | `trial-claude_vol-projects` |
+| Auth volume | `docker-claude_vol-claude-auth` | `trial-claude_vol-claude-auth` |
+| Ports | 41xxx (41300, 41517, etc.) | 42xxx (42300, 42517, etc.) |
+
+### Example: Running Two Instances
+
+```bash
+# Terminal 1 — Main instance
+cd ~/projects/docker-claude
+# .env: COMPOSE_PROJECT_NAME=docker-claude, PORT_BASE=41
+make up
+make claude
+
+# Terminal 2 — Trial instance
+cd ~/projects/trial-claude
+# .env: COMPOSE_PROJECT_NAME=trial-claude, PORT_BASE=42
+make up
+make claude
+```
+
+Both instances run independently with separate codebases and authentication.
+
+### Accessing Each Instance
+
+| Service | Main Instance | Trial Instance |
+|---------|--------------|----------------|
+| React/Express | `localhost:41300` | `localhost:42300` |
+| Vite | `localhost:41517` | `localhost:42517` |
+| noVNC browser | `localhost:41608` | `localhost:42608` |
+| Shell | `make shell` | `make shell` |
+
+### Sharing Images Between Instances
+
+Images are built once and tagged with the project name. To share the base image:
+
+```bash
+# Build in first instance
+cd ~/projects/docker-claude
+make build
+
+# Reuse image in second instance (tag it)
+docker tag docker-claude:latest trial-claude:latest
+
+# Start second instance (skip build)
+cd ~/projects/trial-claude
+make up
+```
+
+### Backup Isolation
+
+Backups are per-instance and include the project name:
+
+```bash
+# Main instance backup
+docker-claude-backup_20260410_120000.tar.gz
+
+# Trial instance backup
+trial-claude-backup_20260410_120000.tar.gz
+```
 
 ## Makefile Commands
 
 The Makefile is the primary interface. Run `make help` to see all commands:
 
 ```bash
+# Initialize
+make init               # Create .env from .env.example if missing
+
 # Build
 make build              # Build core image (all stacks)
 make build-slim         # Build with Node + Go only (skip .NET, Rust)
@@ -236,6 +395,13 @@ make install-plugins   # Register marketplace and sync plugin content
 make sync-plugins     # Manually trigger plugin content sync from marketplace
 make reset-plugins    # Clear stale plugin state for re-sync on next start
 
+# Browser (noVNC + Playwright)
+make browser           # Open noVNC visual browser in host browser
+make browser-start     # Start noVNC visual browser inside container
+make browser-stop      # Stop visual browser processes
+make browser-test      # Run Playwright tests (usage: make browser-test TEST=path/to/test)
+make browser-screenshot # Take a Playwright screenshot (usage: make browser-screenshot URL=https://example.com)
+
 # Cleanup
 make clean              # Remove containers + images (volumes persist)
 make nuke               # ⚠️ Remove EVERYTHING including volumes
@@ -247,6 +413,11 @@ make backup-list        # List all backups (plain + encrypted)
 make restore FILE=...   # Restore from a plain backup
 make restore-enc FILE=... # Restore from an encrypted backup
 make backup-clean       # Delete backups older than 30 days
+
+# Volume Management
+make volume-status      # Show volume status and detected orphans
+make volume-adopt FROM=x # Adopt volumes from project 'x'
+make volume-check       # Run pre-flight volume check manually
 
 # Security Overrides
 make DIND=true up       # Enable Docker-in-Docker (mounts Docker socket)
@@ -379,22 +550,25 @@ If `CLAUDE_MARKETPLACE_PATH` is not set in `.env`, it falls back to the empty `.
 
 ## Port Mappings
 
-All host ports use a **41xxx offset** to avoid conflicts with common services (e.g., macOS AirPlay uses port 5000). Inside the container, apps still listen on their standard ports.
+All host ports use a **`${PORT_BASE}xxx`** pattern (default: `41xxx`) to avoid conflicts with common services (e.g., macOS AirPlay uses port 5000). Inside the container, apps still listen on their standard ports.
 
-| Service | Container Port | Host Port | Access From Host |
+Change `PORT_BASE` in `.env` when running multiple instances (e.g., `42` for second instance → 42xxx ports).
+
+| Service | Container Port | Host Port (PORT_BASE=41) | Access From Host |
 |---|---|---|---|
-| React / Express | 3000 | 41300 | `localhost:41300` |
-| ASP.NET HTTP | 5000 | 41500 | `localhost:41500` |
-| ASP.NET HTTPS | 5001 | 41501 | `localhost:41501` |
-| Vite | 5173 | 41517 | `localhost:41517` |
-| Go / Generic | 8080 | 41808 | `localhost:41808` |
-| Vue / Metro | 8081 | 41881 | `localhost:41881` |
-| Solana RPC | 8899 | 41889 | `localhost:41889` |
-| Solana WS | 8900 | 41890 | `localhost:41890` |
-| Expo | 19000 | 41900 | `localhost:41900` |
-| Expo DevTools | 19001 | 41901 | `localhost:41901` |
-| Android Emulator | 5554 | 41554 | `localhost:41554` |
-| Android ADB | 5555 | 41555 | `localhost:41555` |
+| React / Express | 3000 | `${PORT_BASE}300` → 41300 | `localhost:41300` |
+| ASP.NET HTTP | 5000 | `${PORT_BASE}500` → 41500 | `localhost:41500` |
+| ASP.NET HTTPS | 5001 | `${PORT_BASE}501` → 41501 | `localhost:41501` |
+| Vite | 5173 | `${PORT_BASE}517` → 41517 | `localhost:41517` |
+| Go / Generic | 8080 | `${PORT_BASE}808` → 41808 | `localhost:41808` |
+| Vue / Metro | 8081 | `${PORT_BASE}881` → 41881 | `localhost:41881` |
+| Solana RPC | 8899 | `${PORT_BASE}889` → 41889 | `localhost:41889` |
+| Solana WS | 8900 | `${PORT_BASE}890` → 41890 | `localhost:41890` |
+| Expo | 19000 | `${PORT_BASE}900` → 41900 | `localhost:41900` |
+| Expo DevTools | 19001 | `${PORT_BASE}901` → 41901 | `localhost:41901` |
+| Android Emulator | 5554 | `${PORT_BASE}554` → 41554 | `localhost:41554` |
+| Android ADB | 5555 | `${PORT_BASE}555` → 41555 | `localhost:41555` |
+| noVNC (visual browser) | 6080 | `${PORT_BASE}608` → 41608 | `localhost:41608` |
 
 ## Working with Projects
 
@@ -422,11 +596,14 @@ claude
 ### Getting Files In / Out
 
 ```bash
-# Copy files into the container
-docker cp ./my-file.txt docker-claude:/workspace/
+# Copy files into the container (use container name from 'docker ps')
+docker cp ./my-file.txt $(docker ps -q -f name=docker-claude):/workspace/
+
+# Or specify the full container name
+docker cp ./my-file.txt docker-claude-docker-claude-1:/workspace/
 
 # Copy files out
-docker cp docker-claude:/workspace/output.txt ./
+docker cp docker-claude-docker-claude-1:/workspace/output.txt ./
 
 # Or use git (recommended)
 make shell
@@ -555,7 +732,7 @@ curl -fsSL "https://go.dev/dl/go1.22.0.linux-$(dpkg --print-architecture).tar.gz
 
 ## Backup & Restore
 
-The project volume (`claude-projects`) lives inside Docker's virtual filesystem — not on your host. Backups export it to a timestamped `.tar.gz` on your Mac.
+The project volume (`{project}_vol-projects`) lives inside Docker's virtual filesystem — not on your host. Backups export it to a timestamped `.tar.gz` file.
 
 ### Manual Backup
 
@@ -698,32 +875,41 @@ git config --global core.autocrlf input
 
 ```
 docker-claude/
-├── .devcontainer/devcontainer.json   # VS Code Dev Container config
-├── .dockerignore                     # Build context exclusions
-├── .env.example                      # Template for environment variables
-├── .gitattributes → config/          # LF line ending enforcement
-├── .gitignore                        # Git exclusions
-├── Dockerfile                        # Core image (conditional runtimes)
-├── Dockerfile.mobile                 # Mobile profile (Android/Flutter/RN)
-├── Dockerfile.solana                 # Solana profile (Solana CLI/Anchor)
-├── Makefile                          # All commands (run: make help)
-├── README.md                         # This file
-├── SECURITY.md                       # Security documentation
+├── .devcontainer/
+│   └── devcontainer.json          # VS Code Dev Container config
+├── .dockerignore                  # Build context exclusions
+├── .env.example                   # Template for environment variables
+├── .gitignore                     # Git exclusions
+├── Dockerfile                     # Core image (conditional runtimes)
+├── Dockerfile.mobile              # Mobile profile (Android/Flutter/RN)
+├── Dockerfile.solana              # Solana profile (Solana CLI/Anchor)
+├── Makefile                       # All commands (run: make help)
+├── README.md                      # This file
+├── SECURITY.md                    # Security documentation
+├── claude-settings.json           # Claude Code global settings (source for config/)
+├── claude-project-settings.example.json  # Example per-project settings
 ├── config/
-│   ├── .bashrc                       # Shell config (prompt, aliases, PATH)
-│   ├── .gitattributes                # LF enforcement for cross-platform
-│   ├── claude-settings.json          # Claude Code global settings (mounted into container)
-│   └── claude-project-settings.example.json  # Example per-project settings
-├── docker-compose.debug.yml          # Debug override (SYS_PTRACE + seccomp)
-├── docker-compose.dind.yml           # DinD override (Docker socket mount)
-├── docker-compose.gpu.yml            # GPU override (NVIDIA device passthrough)
-├── docker-compose.windows.yml        # Windows-specific overrides
-├── docker-compose.yml                # Main compose (services, volumes, ports)
-├── marketplace/                      # Default (empty) plugin marketplace fallback
-└── scripts/
-    ├── entrypoint.sh                 # Container startup (runtime init, auth check)
-    ├── setup.ps1                     # One-command setup (Windows)
-    └── setup.sh                      # One-command setup (Mac/Linux)
+│   ├── .bashrc                    # Shell config (prompt, aliases, PATH)
+│   ├── .gitattributes             # LF enforcement for cross-platform
+│   ├── claude-settings.json       # Claude Code global settings (mounted into container)
+│   ├── novnc-startup.sh           # noVNC startup script for visual browser
+│   ├── starship.toml              # Starship prompt config (Catppuccin Powerline)
+│   └── sudoers-dev                # Passwordless sudo config for dev user
+├── docker-compose.debug.yml       # Debug override (SYS_PTRACE + seccomp)
+├── docker-compose.dind.yml        # DinD override (Docker socket mount)
+├── docker-compose.gpu.yml         # GPU override (NVIDIA device passthrough)
+├── docker-compose.windows.yml     # Windows-specific overrides
+├── docker-compose.yml             # Main compose (services, volumes, ports)
+├── marketplace/                   # Default (empty) plugin marketplace fallback
+│   └── .gitkeep                   # Keeps empty directory in git
+├── plans/                         # Implementation plans and RFCs
+│   └── browser-integration-plan.md
+├── scripts/
+│   ├── entrypoint.sh              # Container startup (runtime init, auth check)
+│   ├── setup.ps1                  # One-command setup (Windows)
+│   ├── setup.sh                   # One-command setup (Mac/Linux)
+│   └── volume-check.sh            # Volume detection and migration script
+└── .volume-state                  # Per-folder volume tracking (git-ignored)
 ```
 
 ## License

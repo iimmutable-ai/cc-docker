@@ -1,3 +1,3 @@
-# Allow dev user to fix permissions without password
-# Required for auto-fixing files copied via docker cp
-dev ALL=(root) NOPASSWD: /usr/bin/chown, /usr/bin/chmod, /usr/bin/find
+# Allow dev user full passwordless sudo
+# Development container - security tradeoff for convenience
+dev ALL=(ALL) NOPASSWD: ALL

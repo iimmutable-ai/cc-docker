@@ -9,6 +9,7 @@ Dockerized development environment running Claude Code CLI inside Docker. Provid
 ## Commands
 
 ```bash
+make init               # Initialize .env from .env.example (first-time setup)
 make build              # Build core image (Node + .NET + Go + Rust)
 make build-slim         # Build with Node + Go only (skip .NET, Rust)
 make build-all          # Build all profiles including Solana + Mobile
@@ -43,6 +44,41 @@ make backup             # Backup project volume to ./backups/
 make restore FILE=...   # Restore from backup (stops containers)
 ```
 
+## Multi-Instance Configuration
+
+This project supports running multiple isolated instances simultaneously. Each instance has unique:
+- **Container names** — prefixed by `COMPOSE_PROJECT_NAME`
+- **Volume names** — prefixed by `COMPOSE_PROJECT_NAME`
+- **Ports** — configurable via `PORT_BASE`
+
+### Setting Up a Second Instance
+
+```bash
+# 1. Copy project to new location
+cp -r /path/to/docker-claude /path/to/trial-claude
+cd /path/to/trial-claude
+
+# 2. Create .env with unique settings
+cp .env.example .env
+# Edit .env:
+#   COMPOSE_PROJECT_NAME=trial-claude
+#   PORT_BASE=42
+
+# 3. Build and start
+make build
+make up
+```
+
+### Resource Naming
+
+| Resource | First Instance | Second Instance |
+|----------|---------------|-----------------|
+| Project name | `docker-claude` | `trial-claude` |
+| Container | `docker-claude-docker-claude-1` | `trial-claude-docker-claude-1` |
+| Projects volume | `docker-claude_vol-projects` | `trial-claude_vol-projects` |
+| Auth volume | `docker-claude_vol-claude-auth` | `trial-claude_vol-claude-auth` |
+| Ports | 41xxx | 42xxx |
+
 ## Architecture
 
 ### Conditional Runtime Installation
@@ -65,9 +101,13 @@ docker compose build --build-arg INCLUDE_DOTNET=false --build-arg INCLUDE_RUST=f
 
 ### Volume Architecture
 
-Two named volumes (fully virtualized, no host bind mounts):
-- `claude-projects` → `/workspace` — code, dependencies, caches
-- `claude-auth` → `/home/dev/.claude` — OAuth credentials
+Two named volumes (fully virtualized, no host bind mounts), prefixed by `COMPOSE_PROJECT_NAME`:
+- `{project}_vol-projects` → `/workspace` — code, dependencies, caches
+- `{project}_vol-claude-auth` → `/home/dev/.claude` — OAuth credentials
+
+Default (COMPOSE_PROJECT_NAME=docker-claude):
+- `docker-claude_vol-projects` → `/workspace`
+- `docker-claude_vol-claude-auth` → `/home/dev/.claude`
 
 Files enter/exit via:
 - `git clone` inside container
@@ -84,13 +124,15 @@ Both inherit from `docker-claude:latest` via `ARG BASE_IMAGE=docker-claude`.
 
 ### Port Convention
 
-All host ports use 41xxx offset to avoid conflicts:
-- Container 3000 → Host 41300 (React/Express)
-- Container 5173 → Host 41517 (Vite)
-- Container 8080 → Host 41808 (Go/Generic)
-- Container 6080 → Host 41608 (noVNC visual browser)
+All host ports use `${PORT_BASE}xxx` pattern (default `41xxx`) to avoid conflicts:
+- Container 3000 → Host `${PORT_BASE}300` (default: 41300) — React/Express
+- Container 5173 → Host `${PORT_BASE}517` (default: 41517) — Vite
+- Container 8080 → Host `${PORT_BASE}808` (default: 41808) — Go/Generic
+- Container 6080 → Host `${PORT_BASE}608` (default: 41608) — noVNC visual browser
 
-Map defined in docker-compose.yml `ports:` section.
+For multi-instance setup, use `PORT_BASE=42` for second instance → 42xxx ports.
+
+Map defined in docker-compose.yml `ports:` section with `${PORT_BASE:-41}` substitution.
 
 ### Entrypoint Logic
 
@@ -109,8 +151,10 @@ All shells must source NVM first for Node commands:
 
 | File | Purpose |
 |------|---------|
+| `.env.example` | Template for environment variables (copy to `.env`) |
+| `.env` | Active configuration (git-ignored, includes `COMPOSE_PROJECT_NAME`, `PORT_BASE`) |
 | `Dockerfile` | Core image with conditional runtime build args |
-| `docker-compose.yml` | Service definitions, volumes, ports, profiles |
+| `docker-compose.yml` | Service definitions, volumes, ports, profiles (uses variable substitution) |
 | `Makefile` | Primary interface — all commands via `make` |
 | `entrypoint.sh` | Container startup: runtime init, auth check |
 | `config/.bashrc` | Shell config inside container (aliases, PATH) |

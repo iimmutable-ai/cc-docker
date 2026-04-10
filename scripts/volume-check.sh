@@ -1,0 +1,597 @@
+#!/bin/bash
+# =============================================================================
+# volume-check.sh — Volume detection and migration for docker-claude
+# =============================================================================
+#
+# Handles volume name changes when COMPOSE_PROJECT_NAME is modified.
+# Docker Compose creates NEW volumes with the new project name prefix,
+# leaving old volumes orphaned. This script:
+#   - Detects current vs. orphan volumes
+#   - Prompts user for action (fresh start, adopt, or cancel)
+#   - Copies data from old to new volumes when adopting
+#
+# Usage:
+#   ./scripts/volume-check.sh --check      # Pre-up check (called by make up)
+#   ./scripts/volume-check.sh --status     # Show status and orphan info
+#   ./scripts/volume-check.sh --adopt-from <project>  # Adopt specific volumes
+#
+# Environment Variables:
+#   VOLUME_CHECK_MODE     - auto-fresh|auto-adopt|skip|interactive (default)
+#   VOLUME_ADOPT_FROM     - Project name to auto-adopt from
+#   COMPOSE_PROJECT_NAME  - Current project name (from .env)
+#
+# =============================================================================
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Configuration
+VOLUME_STATE_FILE=".volume-state"
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-docker-claude}"
+PORT_BASE="${PORT_BASE:-41}"
+
+# Expected volume names (Docker Compose format: project_volume-name)
+VOLUME_PROJECTS="${PROJECT_NAME}_vol-projects"
+VOLUME_AUTH="${PROJECT_NAME}_vol-claude-auth"
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+log_info() {
+    echo "${CYAN}=== ${1} ===${NC}"
+}
+
+log_success() {
+    echo "${GREEN}✓${NC} ${1}"
+}
+
+log_warning() {
+    echo "${YELLOW}⚠️ ${1}${NC}"
+}
+
+log_error() {
+    echo "${RED}✗${NC} ${1}"
+}
+
+# Check if a volume exists
+volume_exists() {
+    docker volume inspect "$1" >/dev/null 2>&1
+}
+
+# Get volume size (approximate)
+get_volume_size() {
+    local volume="$1"
+    if volume_exists "$volume"; then
+        # Use docker run to check size
+        docker run --rm -v "$volume:/data:ro" alpine:latest du -sh /data 2>/dev/null | cut -f1 || echo "?"
+    else
+        echo "N/A"
+    fi
+}
+
+# Get volume creation date
+get_volume_created() {
+    local volume="$1"
+    if volume_exists "$volume"; then
+        docker volume inspect "$volume" --format '{{.CreatedAt}}' 2>/dev/null | cut -d'T' -f1 || echo "?"
+    else
+        echo "N/A"
+    fi
+}
+
+# =============================================================================
+# Detection Functions
+# =============================================================================
+
+# Check if current project volumes exist
+detect_current_volumes() {
+    local has_projects=0
+    local has_auth=0
+
+    if volume_exists "$VOLUME_PROJECTS"; then
+        has_projects=1
+    fi
+    if volume_exists "$VOLUME_AUTH"; then
+        has_auth=1
+    fi
+
+    return $((has_projects + has_auth))
+}
+
+# Find volumes from other project names (same pattern: *_vol-*)
+detect_orphan_volumes() {
+    local orphans=""
+    local all_volumes
+
+    # Get all volumes with _vol- pattern
+    all_volumes=$(docker volume ls --format "{{.Name}}" | grep "_vol-" || true)
+
+    for vol in $all_volumes; do
+        # Skip current project volumes
+        if [[ "$vol" == "${PROJECT_NAME}_vol-"* ]]; then
+            continue
+        fi
+        orphans="$orphans $vol"
+    done
+
+    # Return orphan list (space-separated)
+    echo "$orphans"
+}
+
+# Find legacy volumes (old naming pattern: claude-*)
+detect_legacy_volumes() {
+    local legacy=""
+    local all_volumes
+
+    all_volumes=$(docker volume ls --format "{{.Name}}" | grep "^claude-" || true)
+
+    for vol in $all_volumes; do
+        legacy="$legacy $vol"
+    done
+
+    echo "$legacy"
+}
+
+# =============================================================================
+# Volume State File Functions
+# =============================================================================
+
+# Read volume state file
+read_volume_state() {
+    if [[ -f "$VOLUME_STATE_FILE" ]]; then
+        # Read values from file
+        local saved_project=""
+        local saved_port=""
+        local saved_created=""
+
+        while IFS='=' read -r key value; do
+            case "$key" in
+                VOLUME_PROJECT) saved_project="$value" ;;
+                PORT_BASE) saved_port="$value" ;;
+                VOLUME_CREATED) saved_created="$value" ;;
+            esac
+        done < "$VOLUME_STATE_FILE"
+
+        echo "$saved_project|$saved_port|$saved_created"
+    else
+        echo ""
+    fi
+}
+
+# Create volume state file
+create_volume_state() {
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    cat > "$VOLUME_STATE_FILE" << EOF
+# Volume state for ${PROJECT_NAME} instance
+# Auto-generated by scripts/volume-check.sh
+# DO NOT EDIT MANUALLY — this file tracks which volumes belong to this folder
+VOLUME_PROJECT=${PROJECT_NAME}
+VOLUME_CREATED=${timestamp}
+PORT_BASE=${PORT_BASE}
+EOF
+
+    log_success "Created volume state file: $VOLUME_STATE_FILE"
+}
+
+# Check for config mismatch
+check_config_mismatch() {
+    local state=$(read_volume_state)
+
+    if [[ -n "$state" ]]; then
+        local saved_project=$(echo "$state" | cut -d'|' -f1)
+        local saved_port=$(echo "$state" | cut -d'|' -f2)
+
+        if [[ "$saved_project" != "$PROJECT_NAME" ]]; then
+            log_warning "Config mismatch detected!"
+            echo "  Current COMPOSE_PROJECT_NAME: $PROJECT_NAME"
+            echo "  Previously used project: $saved_project"
+            echo ""
+            echo "  If you intentionally changed the project name, you may want to:"
+            echo "    1. Adopt volumes from $saved_project → 'make volume-adopt FROM=$saved_project'"
+            echo "    2. Start fresh with new volumes → 'VOLUME_CHECK_MODE=auto-fresh make up'"
+            echo "    3. Cancel and investigate manually"
+            return 1
+        fi
+
+        if [[ "$saved_port" != "$PORT_BASE" ]]; then
+            log_warning "Port base changed from $saved_port to $PORT_BASE"
+            echo "  This is usually intentional for multi-instance setup."
+        fi
+    fi
+
+    return 0
+}
+
+# =============================================================================
+# Volume Adoption
+# =============================================================================
+
+# Copy data from one volume to another
+adopt_volume() {
+    local source_vol="$1"
+    local target_vol="$2"
+
+    if ! volume_exists "$source_vol"; then
+        log_error "Source volume does not exist: $source_vol"
+        return 1
+    fi
+
+    log_info "Adopting volume: $source_vol → $target_vol"
+
+    # Create target volume if it doesn't exist
+    if ! volume_exists "$target_vol"; then
+        docker volume create "$target_vol"
+        log_success "Created target volume: $target_vol"
+    fi
+
+    # Copy data using alpine container
+    log_info "Copying data..."
+    docker run --rm \
+        -v "$source_vol:/source:ro" \
+        -v "$target_vol:/target" \
+        alpine:latest \
+        sh -c "cp -a /source/. /target/ 2>/dev/null || cp -a /source/* /target/"
+
+    log_success "Data copied from $source_vol to $target_vol"
+}
+
+# Adopt all volumes from a specific project
+adopt_from_project() {
+    local source_project="$1"
+
+    if [[ -z "$source_project" ]]; then
+        log_error "Source project name required"
+        echo "Usage: make volume-adopt FROM=<project-name>"
+        return 1
+    fi
+
+    local source_projects="${source_project}_vol-projects"
+    local source_auth="${source_project}_vol-claude-auth"
+
+    # Check source volumes exist
+    if ! volume_exists "$source_projects" && ! volume_exists "$source_auth"; then
+        log_error "No volumes found for project: $source_project"
+        return 1
+    fi
+
+    log_info "Adopting volumes from $source_project"
+
+    # Adopt projects volume
+    if volume_exists "$source_projects"; then
+        adopt_volume "$source_projects" "$VOLUME_PROJECTS"
+    else
+        log_warning "Source projects volume not found: $source_projects"
+    fi
+
+    # Adopt auth volume
+    if volume_exists "$source_auth"; then
+        adopt_volume "$source_auth" "$VOLUME_AUTH"
+    else
+        log_warning "Source auth volume not found: $source_auth"
+    fi
+
+    # Create state file
+    create_volume_state
+
+    log_success "Adoption complete from $source_project"
+    echo ""
+    echo "  You can now run: make up"
+    echo ""
+    echo "  Optional: Remove old volumes with:"
+    echo "    docker volume rm $source_projects $source_auth"
+}
+
+# =============================================================================
+# Interactive Prompt
+# =============================================================================
+
+show_interactive_prompt() {
+    local orphans="$1"
+    local legacy="$2"
+
+    log_info "Volume Check"
+
+    echo ""
+    echo "Project: ${PROJECT_NAME}"
+    echo "Expected volumes: ${VOLUME_PROJECTS}, ${VOLUME_AUTH}"
+    echo ""
+
+    log_warning "No volumes found for this project, but detected:"
+
+    # List orphan volumes with details
+    for vol in $orphans; do
+        local size=$(get_volume_size "$vol")
+        local created=$(get_volume_created "$vol")
+        echo "  • ${vol} (${size}, created ${created})"
+    done
+
+    # List legacy volumes
+    for vol in $legacy; do
+        local size=$(get_volume_size "$vol")
+        local created=$(get_volume_created "$vol")
+        echo "  • ${vol} (legacy, ${size}, created ${created})"
+    done
+
+    echo ""
+    echo "Options:"
+    echo "  [1] Start fresh — create new empty volumes"
+    echo "  [2] Adopt from docker-claude — copy data to new volumes"
+
+    # Add options for other orphan projects
+    local orphan_projects=""
+    for vol in $orphans; do
+        # Extract project name from volume (project_vol-name)
+        local proj=$(echo "$vol" | sed 's/_vol-.*//')
+        if [[ -n "$proj" && "$proj" != "docker-claude" ]]; then
+            orphan_projects="$orphan_projects $proj"
+        fi
+    done
+
+    # Show unique orphan projects
+    orphan_projects=$(echo "$orphan_projects" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+    local opt_num=3
+    for proj in $orphan_projects; do
+        if [[ -n "$proj" ]]; then
+            echo "  [${opt_num}] Adopt from ${proj} — copy data to new volumes"
+            opt_num=$((opt_num + 1))
+        fi
+    done
+
+    local cancel_opt=$opt_num
+    echo "  [${cancel_opt}] Cancel — abort to investigate manually"
+    echo ""
+
+    # Read user choice
+    read -p "Enter choice [1-${cancel_opt}]: " choice
+
+    case "$choice" in
+        1)
+            log_info "Creating fresh volumes..."
+            create_volume_state
+            log_success "Ready to start fresh. Run: make up"
+            return 0
+            ;;
+        2)
+            adopt_from_project "docker-claude"
+            return 0
+            ;;
+        [3-9])
+            # Map choice to orphan project
+            local selected_idx=$((choice - 3))
+            local proj_array=($orphan_projects)
+            if [[ $selected_idx -lt ${#proj_array[@]} ]]; then
+                adopt_from_project "${proj_array[$selected_idx]}"
+                return 0
+            else
+                log_error "Invalid choice"
+                return 1
+            fi
+            ;;
+        *)
+            log_info "Cancelled. You can manually:"
+            echo "  • Adopt volumes: make volume-adopt FROM=<project>"
+            echo "  • Start fresh: VOLUME_CHECK_MODE=auto-fresh make up"
+            echo "  • Check status: make volume-status"
+            return 1
+            ;;
+    esac
+}
+
+# =============================================================================
+# Main Commands
+# =============================================================================
+
+# Pre-up check (--check)
+run_check() {
+    local check_mode="${VOLUME_CHECK_MODE:-interactive}"
+
+    # Check config mismatch first
+    if ! check_config_mismatch; then
+        # Mismatch detected - show prompt
+        if [[ "$check_mode" == "interactive" ]]; then
+            local orphans=$(detect_orphan_volumes)
+            local legacy=$(detect_legacy_volumes)
+            show_interactive_prompt "$orphans" "$legacy"
+            return $?
+        elif [[ "$check_mode" == "auto-fresh" ]]; then
+            log_info "Auto-fresh mode: creating new volumes"
+            create_volume_state
+            return 0
+        elif [[ "$check_mode" == "skip" ]]; then
+            log_warning "Skipping volume check (VOLUME_CHECK_MODE=skip)"
+            return 0
+        fi
+    fi
+
+    # Check current volumes
+    local current_count=0
+    if volume_exists "$VOLUME_PROJECTS"; then current_count=$((current_count + 1)); fi
+    if volume_exists "$VOLUME_AUTH"; then current_count=$((current_count + 1)); fi
+
+    if [[ $current_count -eq 2 ]]; then
+        # Both volumes exist - proceed normally
+        log_success "Volumes ready for ${PROJECT_NAME}"
+        return 0
+    elif [[ $current_count -eq 1 ]]; then
+        # Partial volumes exist
+        log_warning "Partial volumes detected for ${PROJECT_NAME}"
+        echo "  Missing: $([[ ! $(volume_exists "$VOLUME_PROJECTS") ]] && echo "$VOLUME_PROJECTS")$([[ ! $(volume_exists "$VOLUME_AUTH") ]] && echo "$VOLUME_AUTH")"
+        echo ""
+        echo "Docker Compose will create missing volumes on 'make up'."
+        return 0
+    fi
+
+    # No current volumes - check for orphans
+    local orphans=$(detect_orphan_volumes)
+    local legacy=$(detect_legacy_volumes)
+    local all_orphans="$orphans $legacy"
+
+    if [[ -z "$all_orphans" ]]; then
+        # No volumes at all - fresh start
+        log_info "No volumes found. Fresh start."
+        create_volume_state
+        return 0
+    fi
+
+    # Orphan volumes detected
+    if [[ "$check_mode" == "interactive" ]]; then
+        show_interactive_prompt "$orphans" "$legacy"
+        return $?
+    elif [[ "$check_mode" == "auto-fresh" ]]; then
+        log_warning "Orphan volumes detected but auto-fresh mode set"
+        echo "  Creating new empty volumes..."
+        create_volume_state
+        return 0
+    elif [[ "$check_mode" == "auto-adopt" ]]; then
+        local adopt_from="${VOLUME_ADOPT_FROM:-docker-claude}"
+        log_info "Auto-adopt mode: adopting from $adopt_from"
+        adopt_from_project "$adopt_from"
+        return $?
+    elif [[ "$check_mode" == "skip" ]]; then
+        log_warning "Orphan volumes detected but skip mode set"
+        return 0
+    else
+        # Unknown mode - show prompt
+        show_interactive_prompt "$orphans" "$legacy"
+        return $?
+    fi
+}
+
+# Show status (--status)
+run_status() {
+    log_info "Volume Status"
+
+    echo ""
+    echo "Project: ${PROJECT_NAME}"
+    echo "Port Base: ${PORT_BASE}"
+    echo ""
+
+    # Current volumes
+    echo "Expected Volumes:"
+    if volume_exists "$VOLUME_PROJECTS"; then
+        local size=$(get_volume_size "$VOLUME_PROJECTS")
+        local created=$(get_volume_created "$VOLUME_PROJECTS")
+        echo "  ✓ ${VOLUME_PROJECTS} — ${size} (created ${created})"
+    else
+        echo "  ✗ ${VOLUME_PROJECTS} — NOT FOUND"
+    fi
+    if volume_exists "$VOLUME_AUTH"; then
+        local size=$(get_volume_size "$VOLUME_AUTH")
+        local created=$(get_volume_created "$VOLUME_AUTH")
+        echo "  ✓ ${VOLUME_AUTH} — ${size} (created ${created})"
+    else
+        echo "  ✗ ${VOLUME_AUTH} — NOT FOUND"
+    fi
+
+    echo ""
+
+    # Volume state file
+    local state=$(read_volume_state)
+    if [[ -n "$state" ]]; then
+        local saved_project=$(echo "$state" | cut -d'|' -f1)
+        local saved_port=$(echo "$state" | cut -d'|' -f2)
+        local saved_created=$(echo "$state" | cut -d'|' -f3)
+        echo "Volume State File:"
+        echo "  VOLUME_PROJECT: ${saved_project}"
+        echo "  PORT_BASE: ${saved_port}"
+        echo "  VOLUME_CREATED: ${saved_created}"
+        if [[ "$saved_project" != "$PROJECT_NAME" ]]; then
+            echo "  ${YELLOW}⚠️  CONFIG MISMATCH — project name changed${NC}"
+        fi
+    else
+        echo "Volume State File: NOT FOUND"
+        echo "  (Will be created on first 'make up')"
+    fi
+
+    echo ""
+
+    # Orphan volumes
+    local orphans=$(detect_orphan_volumes)
+    local legacy=$(detect_legacy_volumes)
+
+    if [[ -n "$orphans" ]]; then
+        echo "Orphan Volumes (other projects):"
+        for vol in $orphans; do
+            local size=$(get_volume_size "$vol")
+            local created=$(get_volume_created "$vol")
+            local proj=$(echo "$vol" | sed 's/_vol-.*//')
+            echo "  • ${vol} (${size}, created ${created}) — from project: ${proj}"
+        done
+        echo ""
+    fi
+
+    if [[ -n "$legacy" ]]; then
+        echo "Legacy Volumes (old naming):"
+        for vol in $legacy; do
+            local size=$(get_volume_size "$vol")
+            local created=$(get_volume_created "$vol")
+            echo "  • ${vol} (${size}, created ${created})"
+        done
+        echo ""
+    fi
+
+    if [[ -z "$orphans" && -z "$legacy" ]]; then
+        echo "Orphan/Legacy Volumes: NONE FOUND"
+        echo ""
+    fi
+
+    # Summary
+    echo "Available Actions:"
+    echo "  make up                    — Start with current volumes (or create fresh)"
+    echo "  make volume-adopt FROM=x   — Adopt volumes from project 'x'"
+    echo "  make volume-status         — Show this status"
+}
+
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
+# Parse command
+case "${1:-}" in
+    --check)
+        run_check
+        ;;
+    --status)
+        run_status
+        ;;
+    --adopt-from)
+        adopt_from_project "$2"
+        ;;
+    --create-manifest)
+        # Called after docker compose up to update/create state file
+        if ! check_config_mismatch; then
+            # Mismatch - don't overwrite state file
+            exit 0
+        fi
+        # Create/update state file
+        if [[ ! -f "$VOLUME_STATE_FILE" ]]; then
+            create_volume_state
+        fi
+        ;;
+    --help|-h)
+        echo "Usage:"
+        echo "  ./scripts/volume-check.sh --check          Pre-up volume check"
+        echo "  ./scripts/volume-check.sh --status         Show volume status"
+        echo "  ./scripts/volume-check.sh --adopt-from X   Adopt from project X"
+        echo "  ./scripts/volume-check.sh --create-manifest  Update state file after up"
+        echo ""
+        echo "Environment Variables:"
+        echo "  VOLUME_CHECK_MODE  - auto-fresh|auto-adopt|skip|interactive (default)"
+        echo "  VOLUME_ADOPT_FROM  - Project name for auto-adopt mode"
+        echo "  COMPOSE_PROJECT_NAME - Current project name"
+        ;;
+    *)
+        echo "Unknown command: ${1:-}"
+        echo "Run with --help for usage"
+        exit 1
+        ;;
+esac

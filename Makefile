@@ -7,7 +7,8 @@
         solana-up mobile-up status logs clean nuke health \
         backup restore backup-list backup-clean backup-enc restore-enc \
         install-plugins reset-plugins sync-plugins \
-        browser browser-start browser-stop browser-test browser-screenshot
+        browser browser-start browser-stop browser-test browser-screenshot \
+        volume-check volume-status volume-adopt
 
 # =============================================================================
 # Environment Setup
@@ -142,8 +143,9 @@ build-no-cache: .env ## Build core image without cache
 # Run
 # =============================================================================
 
-up: .env ## Start core environment
+up: .env volume-check ## Start core environment (with volume check)
 	$(COMPOSE) up -d
+	@./scripts/volume-check.sh --create-manifest
 
 down: ## Stop all services (volumes persist)
 	$(COMPOSE) --profile solana --profile mobile down
@@ -402,4 +404,28 @@ restore-enc: .env ## Restore from encrypted backup (usage: make restore-enc FILE
 	else \
 		echo "Cancelled."; \
 	fi
+
+# =============================================================================
+# Volume Management (Multi-Instance Support)
+# =============================================================================
+# Handles volume name changes when COMPOSE_PROJECT_NAME is modified
+
+volume-check: .env ## Pre-flight volume check before starting
+	@./scripts/volume-check.sh --check
+
+volume-status: .env ## Show volume status and detected orphans
+	@./scripts/volume-check.sh --status
+
+volume-adopt: .env ## Adopt orphan volumes (usage: make volume-adopt FROM=project-name)
+	@if [ -z "$(FROM)" ]; then \
+		echo "Usage: make volume-adopt FROM=<project-name>"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make volume-adopt FROM=docker-claude"; \
+		echo "  make volume-adopt FROM=trial-claude"; \
+		echo ""; \
+		echo "Run 'make volume-status' to see available orphan volumes."; \
+		exit 1; \
+	fi
+	@./scripts/volume-check.sh --adopt-from $(FROM)
 

@@ -46,6 +46,7 @@ services:
 
     # -- Environment --
     environment:
+      - HOME=/home/${DEV_USER:-dev}  # Override host HOME that Docker passes through
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
       - ANTHROPIC_DEFAULT_HAIKU_MODEL=${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}

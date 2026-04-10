@@ -16,7 +16,7 @@ make build-all          # Build all profiles including Solana + Mobile
 make build-no-cache     # Full rebuild without layer cache
 make GPU=true build     # Build with NVIDIA CUDA support (Linux/WSL2 only)
 
-make up                 # Start core environment
+make up                 # Start core environment (with volume check)
 make down               # Stop all services (volumes persist)
 make solana-up          # Start with Solana profile
 make mobile-up          # Start with Mobile profile
@@ -36,6 +36,10 @@ make browser-screenshot URL= # Take a Playwright screenshot
 
 make health             # Verify all runtimes, auth, Docker socket
 make status             # Show containers, volumes, image sizes
+
+make volume-status      # Show volume status and detected orphans
+make volume-adopt FROM= # Adopt orphan volumes from project 'FROM'
+make volume-check       # Run pre-flight volume check manually
 
 make clean              # Remove containers + images (volumes persist)
 make nuke               # Remove EVERYTHING including volumes (prompts)
@@ -152,11 +156,13 @@ All shells must source NVM first for Node commands:
 | File | Purpose |
 |------|---------|
 | `.env.example` | Template for environment variables (copy to `.env`) |
-| `.env` | Active configuration (git-ignored, includes `COMPOSE_PROJECT_NAME`, `PORT_BASE`) |
+| `.env` | Active configuration (git-ignored, includes `COMPOSE_PROJECT_NAME`, `PORT_BASE`, `VOLUME_CHECK_MODE`) |
+| `.volume-state` | Per-folder volume tracking (git-ignored, auto-generated) |
 | `Dockerfile` | Core image with conditional runtime build args |
 | `docker-compose.yml` | Service definitions, volumes, ports, profiles (uses variable substitution) |
 | `Makefile` | Primary interface — all commands via `make` |
-| `entrypoint.sh` | Container startup: runtime init, auth check |
+| `scripts/volume-check.sh` | Volume detection, orphan detection, and migration |
+| `scripts/entrypoint.sh` | Container startup: runtime init, auth check |
 | `config/.bashrc` | Shell config inside container (aliases, PATH) |
 | `config/novnc-startup.sh` | noVNC startup script for visual browser |
 | `config/starship.toml` | Starship prompt config (Catppuccin Powerline) |

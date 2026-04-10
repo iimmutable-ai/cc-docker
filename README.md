@@ -94,6 +94,8 @@ CLAUDE_MARKETPLACE_PATH=/path/to/your/marketplace
 |---|---|---|
 | `COMPOSE_PROJECT_NAME` | No* | Docker Compose project name (namespaces containers, volumes, networks). Change for each parallel instance. Default: `docker-claude`. |
 | `PORT_BASE` | No | Port prefix for host bindings. Default: `41` → 41xxx ports. Use `42` for second instance, `43` for third, etc. |
+| `VOLUME_CHECK_MODE` | No | Volume check mode: `interactive` (prompt), `auto-fresh` (create new), `auto-adopt` (copy from source), `skip` (no checks). Default: `interactive`. |
+| `VOLUME_ADOPT_FROM` | No | Source project for auto-adopt mode. Example: `docker-claude`. Only used when `VOLUME_CHECK_MODE=auto-adopt`. |
 | `ANTHROPIC_API_KEY` | No* | API key for headless auth. Leave empty and use `make login` for OAuth. |
 | `ANTHROPIC_BASE_URL` | No | Override the Anthropic API endpoint (e.g. for proxies or local LLM gateways). |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | No | Pin a specific Haiku model version. Leave empty for Claude Code defaults. |
@@ -213,6 +215,8 @@ claude
 | Stop visual browser | `make browser-stop` |
 | Run Playwright tests | `make browser-test TEST=path/to/test` |
 | Take a screenshot | `make browser-screenshot URL=https://example.com` |
+| Check volume status | `make volume-status` |
+| Adopt orphan volumes | `make volume-adopt FROM=docker-claude` |
 
 ## Multi-Instance Setup
 
@@ -220,6 +224,46 @@ You can run multiple isolated instances of docker-claude simultaneously. Each in
 - **Containers** — separate container names
 - **Volumes** — isolated code and auth storage
 - **Ports** — configurable port range to avoid conflicts
+
+### Volume Name Changes
+
+When you change `COMPOSE_PROJECT_NAME` (e.g., setting up a second instance), Docker Compose creates NEW volumes with the new project prefix. Old volumes from the previous configuration remain as "orphans" — they're not deleted but are no longer associated with your project.
+
+The `make up` command now includes a pre-flight volume check that:
+- Detects if current project volumes exist
+- Finds orphan volumes from other project names
+- Prompts you to choose an action (fresh start, adopt data, or cancel)
+
+### Volume Check Modes
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `interactive` (default) | Prompt user when orphans detected | Normal usage |
+| `auto-fresh` | Always create fresh volumes | CI/CD, automated environments |
+| `auto-adopt` | Auto-adopt from specified project | Migration with known source |
+| `skip` | Skip all checks | Trusted environments |
+
+```bash
+# Interactive mode (default)
+make up
+
+# Auto-fresh — create new volumes without prompting
+VOLUME_CHECK_MODE=auto-fresh make up
+
+# Auto-adopt — copy data from specific project
+VOLUME_ADOPT_FROM=docker-claude make up
+
+# Skip checks — proceed without prompts
+VOLUME_CHECK_MODE=skip make up
+```
+
+### Volume Management Commands
+
+| Command | Description |
+|---|---|
+| `make volume-status` | Show current volumes, orphans, and state file |
+| `make volume-adopt FROM=x` | Adopt volumes from project 'x' |
+| `make volume-check` | Run pre-flight check manually |
 
 ### Quick Setup
 
@@ -369,6 +413,11 @@ make backup-list        # List all backups (plain + encrypted)
 make restore FILE=...   # Restore from a plain backup
 make restore-enc FILE=... # Restore from an encrypted backup
 make backup-clean       # Delete backups older than 30 days
+
+# Volume Management
+make volume-status      # Show volume status and detected orphans
+make volume-adopt FROM=x # Adopt volumes from project 'x'
+make volume-check       # Run pre-flight volume check manually
 
 # Security Overrides
 make DIND=true up       # Enable Docker-in-Docker (mounts Docker socket)
@@ -855,10 +904,12 @@ docker-claude/
 │   └── .gitkeep                   # Keeps empty directory in git
 ├── plans/                         # Implementation plans and RFCs
 │   └── browser-integration-plan.md
-└── scripts/
-    ├── entrypoint.sh              # Container startup (runtime init, auth check)
-    ├── setup.ps1                  # One-command setup (Windows)
-    └── setup.sh                   # One-command setup (Mac/Linux)
+├── scripts/
+│   ├── entrypoint.sh              # Container startup (runtime init, auth check)
+│   ├── setup.ps1                  # One-command setup (Windows)
+│   ├── setup.sh                   # One-command setup (Mac/Linux)
+│   └── volume-check.sh            # Volume detection and migration script
+└── .volume-state                  # Per-folder volume tracking (git-ignored)
 ```
 
 ## License

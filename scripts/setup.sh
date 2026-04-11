@@ -105,6 +105,18 @@ if ! docker compose version > /dev/null 2>&1; then
 fi
 echo -e "${GREEN}✓${NC} Docker Compose $(docker compose version --short)"
 
+# -- Sanitize scripts (fix permissions + line endings from download) --
+echo -e "\n${BLUE}[1.5/6] Sanitizing scripts...${NC}"
+find "$PROJECT_DIR/scripts" -type f \( -name "*.sh" \) -exec chmod +x {} \;
+find "$PROJECT_DIR/scripts" -type f \( -name "*.sh" \) -exec sed -i '' 's/\r$//' {} \; 2>/dev/null \
+    || find "$PROJECT_DIR/scripts" -type f \( -name "*.sh" \) -exec sed -i 's/\r$//' {} \;
+find "$PROJECT_DIR/config" -type f -exec sed -i '' 's/\r$//' {} \; 2>/dev/null \
+    || find "$PROJECT_DIR/config" -type f -exec sed -i 's/\r$//' {} \;
+# Also sanitize Dockerfiles
+find "$PROJECT_DIR" -maxdepth 1 -name "Dockerfile*" -exec sed -i '' 's/\r$//' {} \; 2>/dev/null \
+    || find "$PROJECT_DIR" -maxdepth 1 -name "Dockerfile*" -exec sed -i 's/\r$//' {} \;
+echo -e "${GREEN}✓${NC} Scripts sanitized (permissions + line endings)"
+
 # -- Create .env file --
 echo -e "\n${BLUE}[2/6] Configuring environment...${NC}"
 

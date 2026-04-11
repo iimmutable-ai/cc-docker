@@ -1,14 +1,16 @@
 #!/bin/bash
 # =============================================================================
 # Container Entrypoint — Claude Code Dev Environment
-# Handles: Permission fix, NVM init, SSH agent, Claude auth, runtime checks
-#
-# This script runs twice:
-#   1st pass: As root (UID 0) — fixes permissions, then drops to dev
-#   2nd pass: As dev (UID 1000) — continues normal startup
+# Handles: NVM init, SSH agent, Claude auth, Docker group, runtime checks
 # =============================================================================
 
 set -e
+
+# -- Command-line flags --
+if [ "$1" = "--sync-plugins" ]; then
+    sync_plugin_content
+    exit 0
+fi
 
 # -- Colors for output --
 GREEN='\033[0;32m'
@@ -17,52 +19,8 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# =============================================================================
-# ROOT MODE: Fix permissions then drop to dev
-# =============================================================================
-if [ "$(id -u)" = "0" ]; then
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}  Docker Claude — Initializing (as root)${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-
-    # Fix files copied from host - handle ANY non-dev user (not just 501/502)
-    echo -e "${YELLOW}!${NC} Fixing file ownership for host-copied files..."
-    find /workspace -not -user dev 2>/dev/null | while read item; do
-        [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null || true
-    done
-    # Ensure read access for all users (fixes 600 permissions from macOS)
-    # Run on ALL files - not just non-dev owned (which would find nothing after chown)
-    chmod -R a+rX /workspace 2>/dev/null || true
-
-    # Fix home directory if needed
-    find /home/dev -not -user dev 2>/dev/null | while read item; do
-        [ -e "$item" ] && chown -h dev:dev "$item" 2>/dev/null || true
-    done
-    # Run on ALL files in home directory
-    chmod -R a+rX /home/dev 2>/dev/null || true
-
-    echo -e "${GREEN}✓${NC} Ownership fixed"
-
-    # -- Docker socket permissions (DinD mode) --
-    if [ -S "/var/run/docker.sock" ]; then
-        socket_perms=$(stat -c "%a" /var/run/docker.sock 2>/dev/null || stat -f "%Lp" /var/run/docker.sock 2>/dev/null)
-        if [ "$socket_perms" != "666" ]; then
-            echo -e "${YELLOW}!${NC} Fixing Docker socket permissions (DinD mode)..."
-            chmod 666 /var/run/docker.sock || true
-            echo -e "${GREEN}✓${NC} Docker socket permissions fixed"
-        fi
-    fi
-
-    # Drop privileges and re-execute as dev user
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    exec gosu dev "$0" "$@"
-fi
-
-# =============================================================================
-# DEV USER MODE: Normal startup (runs as UID 1000)
-# =============================================================================
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}  Claude Code Development Environment${NC}"
+echo -e "${BLUE}  Docker Claude — Development Environment${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
 # -- NVM --
@@ -80,8 +38,8 @@ fi
 
 # -- Go --
 if [ -d "/usr/local/go" ]; then
-    export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
-    export GOPATH="$HOME/go"
+    export PATH="/usr/local/go/bin:/home/dev/go/bin:$PATH"
+    export GOPATH="/home/dev/go"
     mkdir -p "$GOPATH"
     echo -e "${GREEN}✓${NC} Go $(go version 2>/dev/null | awk '{print $3}' || echo 'installed')"
 fi
@@ -103,9 +61,24 @@ else
     echo -e "${YELLOW}!${NC} Browser not installed (INCLUDE_BROWSER=false)"
 fi
 
+# -- Starship --
+if command -v starship &> /dev/null; then
+    echo -e "${GREEN}✓${NC} Starship prompt (Catppuccin Powerline)"
+fi
+
+# -- Yazi --
+if command -v yazi &> /dev/null; then
+    echo -e "${GREEN}✓${NC} Yazi $(yazi --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'installed')"
+fi
+
+# -- Lazygit --
+if command -v lazygit &> /dev/null; then
+    echo -e "${GREEN}✓${NC} Lazygit $(lazygit --version 2>/dev/null || echo 'installed')"
+fi
+
 # -- Solana (if available) --
-if [ -d "$HOME/.local/share/solana/install/active_release" ]; then
-    export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+if [ -d "/home/dev/.local/share/solana/install/active_release" ]; then
+    export PATH="/home/dev/.local/share/solana/install/active_release/bin:$PATH"
     echo -e "${GREEN}✓${NC} Solana $(solana --version 2>/dev/null | awk '{print $2}' || echo 'installed')"
 fi
 
@@ -119,10 +92,10 @@ fi
 if [ -S "/ssh-agent" ]; then
     export SSH_AUTH_SOCK=/ssh-agent
     echo -e "${GREEN}✓${NC} SSH agent forwarded"
-elif [ -d "$HOME/.ssh" ] && [ "$(ls -A "$HOME/.ssh" 2>/dev/null)" ]; then
+elif [ -d "/home/dev/.ssh" ] && [ "$(ls -A /home/dev/.ssh 2>/dev/null)" ]; then
     # Windows mode: keys mounted directly, start a local agent
     eval "$(ssh-agent -s)" > /dev/null 2>&1
-    for key in "$HOME"/.ssh/id_*; do
+    for key in /home/dev/.ssh/id_*; do
         [ -f "$key" ] && [[ "$key" != *.pub ]] && ssh-add "$key" 2>/dev/null || true
     done
     echo -e "${GREEN}✓${NC} SSH keys loaded from mounted directory"
@@ -134,17 +107,118 @@ fi
 if [ -S "/var/run/docker.sock" ]; then
     echo -e "${GREEN}✓${NC} Docker socket available ($(docker --version 2>/dev/null | awk '{print $3}' | tr -d ','))"
 else
-    echo -e "${YELLOW}!${NC} Docker socket not mounted — DinD unavailable"
+    echo -e "${YELLOW}!${NC} Docker socket not mounted (default for security)"
+    echo -e "    To enable DinD: ${BLUE}make DIND=true up${NC}"
 fi
 
 # -- Claude Code Auth --
 if [ -n "$ANTHROPIC_API_KEY" ]; then
     echo -e "${GREEN}✓${NC} Claude Code: API key configured"
-elif [ -f "$HOME/.claude/credentials.json" ] || [ -f "$HOME/.claude/.credentials.json" ]; then
+elif [ -f "/home/dev/.claude/credentials.json" ] || [ -f "/home/dev/.claude/.credentials.json" ]; then
     echo -e "${GREEN}✓${NC} Claude Code: OAuth session found"
 else
     echo -e "${YELLOW}!${NC} Claude Code: No auth configured"
     echo -e "    Set ANTHROPIC_API_KEY or run: ${BLUE}claude login${NC}"
+fi
+
+# -- Claude Code Settings --
+if [ -f "/etc/claude-code/settings.json" ]; then
+    # Symlink mounted settings into Claude Code's expected location
+    ln -sf /etc/claude-code/settings.json /home/dev/.claude/settings.json 2>/dev/null || true
+    echo -e "${GREEN}✓${NC} Claude Code: Global settings loaded"
+else
+    echo -e "${YELLOW}!${NC} Claude Code: No global settings (using defaults)"
+fi
+
+# -- Claude Code Marketplace --
+sync_plugin_content() {
+    local marketplace="/etc/claude-code/marketplace"
+    local plugins_dir="/home/dev/.claude/plugins"
+    local installed_json="$plugins_dir/installed_plugins.json"
+
+    # Need marketplace mounted and installed plugins metadata
+    [ -d "$marketplace" ] || return 0
+    [ -f "$installed_json" ] || return 0
+
+    # Extract installed plugin names (keys of the JSON object)
+    local plugin_names
+    plugin_names=$(grep -oP '"([^"]+)"\s*:' "$installed_json" 2>/dev/null | grep -oP '"[^"]+"' | tr -d '"' | grep -v '^\s*$' || true)
+    [ -n "$plugin_names" ] || return 0
+
+    local fixed=0 ok=0
+    for plugin_name in $plugin_names; do
+        local plugin_dir="$plugins_dir/$plugin_name"
+        # Create directory if it doesn't exist
+        if [ ! -d "$plugin_dir" ]; then
+            mkdir -p "$plugin_dir"
+            echo -e "    Created plugin directory: ${plugin_name}"
+        fi
+
+        # Check if directory has actual files (not just empty)
+        if [ -z "$(ls -A "$plugin_dir" 2>/dev/null)" ]; then
+            # Directory exists but is empty — find the source in marketplace
+            if [ -d "$marketplace/$plugin_name" ]; then
+                cp -rn "$marketplace/$plugin_name/." "$plugin_dir/" 2>/dev/null && \
+                    echo -e "    ${GREEN}✓${NC} Synced content: ${plugin_name}" || \
+                    echo -e "    ${RED}✗${NC} Failed to sync: ${plugin_name}"
+                fixed=$((fixed + 1))
+            else
+                # Plugin name might differ from marketplace directory — try all subdirs
+                # INCLUDING the nested plugins/ subdirectory
+                local found=0
+                for src_dir in "$marketplace"/*/ "$marketplace/plugins"/*/ 2>/dev/null; do
+                    [ -d "$src_dir" ] || continue
+                    local src_name
+                    src_name=$(basename "$src_dir")
+                    # Check if this marketplace dir matches (same name OR contains matching plugin in plugin.json)
+                    if [ "$src_name" = "$plugin_name" ] || \
+                       grep -ql "$plugin_name" "$src_dir/plugin.json" 2>/dev/null; then
+                        cp -rn "$src_dir." "$plugin_dir/" 2>/dev/null && \
+                            echo -e "    ${GREEN}✓${NC} Synced content: ${plugin_name} (from ${src_name})" && \
+                            found=1 && break
+                    fi
+                done
+                if [ "$found" -eq 0 ]; then
+                    echo -e "    ${RED}✗${NC} No source found in marketplace for: ${plugin_name}"
+                else
+                    fixed=$((fixed + 1))
+                fi
+            fi
+        else
+            ok=$((ok + 1))
+        fi
+    done
+
+    # Print summary if any work was done
+    if [ "$fixed" -gt 0 ]; then
+        echo -e "    ${GREEN}→${NC} Synced ${fixed} plugin(s), ${ok} already OK"
+    fi
+
+    # Warn about any empty plugin directories
+    for plugin_name in $plugin_names; do
+        local plugin_dir="$plugins_dir/$plugin_name"
+        if [ -d "$plugin_dir" ] && [ -z "$(ls -A "$plugin_dir" 2>/dev/null)" ]; then
+            echo -e "    ${YELLOW}!${NC} Plugin still empty: ${plugin_name}"
+            echo -e "      Run: ${BLUE}make reset-plugins && make down && make up${NC}"
+        fi
+    done
+}
+
+if [ -d "/etc/claude-code/marketplace" ] && [ "$(ls -A /etc/claude-code/marketplace 2>/dev/null | grep -v .gitkeep)" ]; then
+    PLUGIN_COUNT=$(find /etc/claude-code/marketplace -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+    echo -e "${GREEN}✓${NC} Claude Code: Local marketplace mounted (${PLUGIN_COUNT} plugin(s))"
+
+    # Check installed plugins and their content status
+    INSTALLED_JSON="/home/dev/.claude/plugins/installed_plugins.json"
+    if [ -f "$INSTALLED_JSON" ]; then
+        INSTALLED_COUNT=$(grep -oP '"([^"]+)"\s*:' "$INSTALLED_JSON" 2>/dev/null | grep -oP '"[^"]+"' | tr -d '"' | grep -v '^\s*$' | wc -l | tr -d ' ')
+        echo -e "    ${INSTALLED_COUNT} plugin(s) installed"
+        sync_plugin_content
+    else
+        echo -e "    Register with: ${BLUE}claude plugin marketplace add /etc/claude-code/marketplace${NC}"
+    fi
+else
+    echo -e "${YELLOW}!${NC} Claude Code: No local marketplace mounted"
 fi
 
 # -- Workspace --

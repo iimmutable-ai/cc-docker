@@ -80,6 +80,24 @@ if ($WithGpu) {
     }
 }
 
+# -- Sanitize scripts (fix CRLF line endings for Linux containers) --
+Write-Host "`n[1.5/6] Sanitizing scripts..." -ForegroundColor Cyan
+$filesToSanitize = @(
+    (Get-ChildItem -Path "$ProjectDir\scripts" -Filter "*.sh" -ErrorAction SilentlyContinue),
+    (Get-ChildItem -Path "$ProjectDir\config" -File -ErrorAction SilentlyContinue),
+    (Get-ChildItem -Path "$ProjectDir" -Filter "Dockerfile*" -File -ErrorAction SilentlyContinue)
+) | ForEach-Object { $_ } | Where-Object { $_ -ne $null }
+
+foreach ($file in $filesToSanitize) {
+    $content = [System.IO.File]::ReadAllText($file.FullName)
+    $sanitized = $content -replace "`r`n", "`n"
+    if ($content -ne $sanitized) {
+        [System.IO.File]::WriteAllText($file.FullName, $sanitized)
+        Write-Host "  Fixed line endings: $($file.Name)" -ForegroundColor DarkGray
+    }
+}
+Write-Host "✓ Scripts sanitized (line endings converted to LF)" -ForegroundColor Green
+
 # ===== [2/6] Environment =====
 Write-Host "`n[2/6] Configuring environment..." -ForegroundColor Cyan
 

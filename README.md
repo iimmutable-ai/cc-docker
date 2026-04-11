@@ -912,6 +912,20 @@ docker-claude/
 └── .volume-state                  # Per-folder volume tracking (git-ignored)
 ```
 
+## Co-Developed with
+
+This project was developed with assistance from multiple AI systems:
+
+**AI Contributors:**
+- GLM-5.1/5 (Z.ai)
+- MiniMax M2.5 (Alibaba Cloud)
+- Kimi K2.5 (Alibaba Cloud)
+- QWen 3.5 (Alibaba Cloud)
+- Anthropic Claude (Anthropic)
+
+**Development Tool:**
+Built using [Claude Code](https://claude.ai/code) — Anthropic's official CLI for Claude.
+
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.

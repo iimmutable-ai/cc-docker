@@ -43,6 +43,16 @@ if [ "$(id -u)" = "0" ]; then
 
     echo -e "${GREEN}✓${NC} Ownership fixed"
 
+    # -- Docker socket permissions (DinD mode) --
+    if [ -S "/var/run/docker.sock" ]; then
+        socket_perms=$(stat -c "%a" /var/run/docker.sock 2>/dev/null || stat -f "%Lp" /var/run/docker.sock 2>/dev/null)
+        if [ "$socket_perms" != "666" ]; then
+            echo -e "${YELLOW}!${NC} Fixing Docker socket permissions (DinD mode)..."
+            chmod 666 /var/run/docker.sock || true
+            echo -e "${GREEN}✓${NC} Docker socket permissions fixed"
+        fi
+    fi
+
     # Drop privileges and re-execute as dev user
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     exec gosu dev "$0" "$@"

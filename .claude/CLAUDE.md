@@ -22,6 +22,11 @@ make solana-up          # Start with Solana profile
 make mobile-up          # Start with Mobile profile
 make all-up             # Start everything
 
+# Host Bind Mount (iOS Development on macOS)
+make host-bind-up       # Start with host bind mount (core only)
+make host-bind-mobile-up # Start with host bind + Mobile profile (for iOS dev)
+make host-bind-solana-up # Start with host bind + Solana profile
+
 make shell              # Open bash in docker-claude
 make claude             # Launch Claude Code CLI
 make login              # Run Claude OAuth login flow
@@ -82,6 +87,35 @@ make up
 | Projects volume | `docker-claude_vol-projects` | `trial-claude_vol-projects` |
 | Auth volume | `docker-claude_vol-claude-auth` | `trial-claude_vol-claude-auth` |
 | Ports | 41xxx | 42xxx |
+
+## iOS Development Workflow (macOS)
+
+For iOS development with Flutter, use the host bind mount workflow:
+- **Edit code in container** → `make shell-mobile`
+- **Build/debug on host** → `flutter run -d iPhone` (uses host Xcode + Simulator)
+
+### Setup
+
+```bash
+# 1. Start with host bind mount (creates ./workspace if missing)
+make host-bind-mobile-up
+
+# 2. Create Flutter app inside container
+make shell-mobile
+cd /workspace
+flutter create my_app
+
+# 3. On Mac host, run iOS debugging
+cd ./workspace/my_app
+flutter run -d iPhone
+```
+
+### Key Points
+
+- `docker-compose.host-bind.yml` replaces named volume with host bind mount
+- `HOST_WORKSPACE_PATH` defaults to `./workspace` (configurable in `.env`)
+- Auth volume still uses named volume (credentials shouldn't sync to host)
+- Named volume mode remains default — host bind only when explicitly used
 
 ## Architecture
 
@@ -156,10 +190,11 @@ All shells must source NVM first for Node commands:
 | File | Purpose |
 |------|---------|
 | `.env.example` | Template for environment variables (copy to `.env`) |
-| `.env` | Active configuration (git-ignored, includes `COMPOSE_PROJECT_NAME`, `PORT_BASE`, `VOLUME_CHECK_MODE`) |
+| `.env` | Active configuration (git-ignored, includes `COMPOSE_PROJECT_NAME`, `PORT_BASE`, `VOLUME_CHECK_MODE`, `HOST_WORKSPACE_PATH`) |
 | `.volume-state` | Per-folder volume tracking (git-ignored, auto-generated) |
 | `Dockerfile` | Core image with conditional runtime build args |
 | `docker-compose.yml` | Service definitions, volumes, ports, profiles (uses variable substitution) |
+| `docker-compose.host-bind.yml` | Host bind mount override for iOS development |
 | `Makefile` | Primary interface — all commands via `make` |
 | `scripts/volume-check.sh` | Volume detection, orphan detection, and migration |
 | `scripts/entrypoint.sh` | Container startup: runtime init, auth check |

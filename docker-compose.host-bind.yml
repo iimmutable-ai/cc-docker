@@ -1,0 +1,44 @@
+# =============================================================================
+# Docker Compose Host Bind Override — Host Workspace Mount for iOS Debugging
+#
+# PURPOSE:
+#   Replaces named volume with host bind mount for iOS development.
+#   This allows Flutter iOS apps to be built/debugged on Mac host with Xcode
+#   while code is edited inside the container.
+#
+# REQUIREMENTS:
+#   - macOS host with Xcode installed
+#   - iOS Simulator running on host
+#   - Flutter installed on host (for host-side flutter run)
+#
+# USAGE:
+#   docker compose -f docker-compose.yml -f docker-compose.host-bind.yml --profile mobile up -d
+#
+#   Or via Makefile:
+#     make host-bind-up
+#     make host-bind-mobile-up
+#
+# NOTES:
+#   - Named volume mode remains the default
+#   - This override only applies when explicitly used
+#   - HOST_WORKSPACE_PATH defaults to ./workspace if not set
+#   - :cached flag improves macOS filesystem performance
+# =============================================================================
+
+services:
+  docker-claude:
+    volumes:
+      # Replace named volume with host bind mount
+      - ${HOST_WORKSPACE_PATH:-./workspace}:/workspace:cached
+      # Keep auth volume (credentials shouldn't sync to host)
+      - vol-claude-auth:/home/${DEV_USER:-dev}/.claude
+
+  docker-claude-solana:
+    volumes:
+      - ${HOST_WORKSPACE_PATH:-./workspace}:/workspace:cached
+      - vol-claude-auth:/home/${DEV_USER:-dev}/.claude
+
+  docker-claude-mobile:
+    volumes:
+      - ${HOST_WORKSPACE_PATH:-./workspace}:/workspace:cached
+      - vol-claude-auth:/home/${DEV_USER:-dev}/.claude

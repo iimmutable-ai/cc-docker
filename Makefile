@@ -4,7 +4,8 @@
 # =============================================================================
 
 .PHONY: help init build build-slim build-all up down restart shell claude login \
-        solana-up mobile-up status logs clean nuke health \
+        solana-up mobile-up host-bind-up host-bind-mobile-up host-bind-solana-up \
+        status logs clean nuke health \
         backup restore backup-list backup-clean backup-enc restore-enc \
         install-plugins reset-plugins sync-plugins \
         browser browser-start browser-stop browser-test browser-screenshot \
@@ -97,6 +98,8 @@ help: .env ## Show this help
 	@echo "  make DIND=true up      Start with Docker-in-Docker enabled"
 	@echo "  make DEBUG=true up     Start with debugger support (SYS_PTRACE)"
 	@echo "  make solana-up         Start with Solana profile"
+	@echo "  make mobile-up         Start with Mobile profile (Android)"
+	@echo "  make host-bind-mobile-up  Start with host bind mount (iOS dev)"
 	@echo "  make claude            Launch Claude Code CLI"
 	@echo "  make GPU=true build    Build with NVIDIA GPU support"
 	@echo "  make backup            Backup project volume"
@@ -106,6 +109,10 @@ help: .env ## Show this help
 	@echo "  1. Copy project to new directory"
 	@echo "  2. Edit .env: COMPOSE_PROJECT_NAME=trial-claude PORT_BASE=42"
 	@echo "  3. Run 'make up' — isolated containers/volumes/ports"
+	@echo ""
+	@echo "iOS Development (macOS only):"
+	@echo "  make host-bind-mobile-up  Container edits + host Xcode/Simulator"
+	@echo "  Then: cd ./workspace/my_app && flutter run -d iPhone"
 	@echo ""
 
 # =============================================================================
@@ -157,6 +164,33 @@ solana-up: .env ## Start with Solana profile
 
 mobile-up: .env ## Start with Mobile profile
 	$(COMPOSE) --profile mobile up -d
+
+# =============================================================================
+# Host Bind Mount (iOS Development)
+# =============================================================================
+# Uses docker-compose.host-bind.yml to mount ./workspace from host
+# Enables iOS development: container edits + host Xcode/Simulator builds
+
+host-bind-up: .env ## Start with host workspace bind mount (core only)
+	@if [ ! -d "${HOST_WORKSPACE_PATH:-./workspace}" ]; then \
+		echo "Creating workspace directory: ${HOST_WORKSPACE_PATH:-./workspace}"; \
+		mkdir -p "${HOST_WORKSPACE_PATH:-./workspace}"; \
+	fi
+	docker compose -p $(PROJECT_NAME) $(COMPOSE_FILES) -f docker-compose.host-bind.yml up -d
+
+host-bind-mobile-up: .env ## Start with host bind + Mobile profile (for iOS dev)
+	@if [ ! -d "${HOST_WORKSPACE_PATH:-./workspace}" ]; then \
+		echo "Creating workspace directory: ${HOST_WORKSPACE_PATH:-./workspace}"; \
+		mkdir -p "${HOST_WORKSPACE_PATH:-./workspace}"; \
+	fi
+	docker compose -p $(PROJECT_NAME) $(COMPOSE_FILES) -f docker-compose.host-bind.yml --profile mobile up -d
+
+host-bind-solana-up: .env ## Start with host bind + Solana profile
+	@if [ ! -d "${HOST_WORKSPACE_PATH:-./workspace}" ]; then \
+		echo "Creating workspace directory: ${HOST_WORKSPACE_PATH:-./workspace}"; \
+		mkdir -p "${HOST_WORKSPACE_PATH:-./workspace}"; \
+	fi
+	docker compose -p $(PROJECT_NAME) $(COMPOSE_FILES) -f docker-compose.host-bind.yml --profile solana up -d
 
 all-up: .env ## Start everything
 	$(COMPOSE) --profile solana --profile mobile up -d

@@ -105,6 +105,7 @@ CLAUDE_MARKETPLACE_PATH=/path/to/your/marketplace
 | `SSH_AUTH_SOCK` | No | SSH agent socket path (Mac/Linux). Run `echo $SSH_AUTH_SOCK` to get value. |
 | `HOME` | No | Host home directory for mounting `.gitconfig` (Mac/Linux). Run `echo $HOME`. |
 | `CLAUDE_MARKETPLACE_PATH` | No | Absolute path to a local Claude Code plugin marketplace folder on your host. |
+| `HOST_WORKSPACE_PATH` | No | Host workspace folder for iOS development. Used with host-bind override. Default: `./workspace`. |
 | `USERPROFILE` | No | Windows only. Set to `%USERPROFILE%` path (e.g. `C:\Users\YourName`). |
 
 *One of `ANTHROPIC_API_KEY` or OAuth (`make login`) is required to use Claude Code. `COMPOSE_PROJECT_NAME` and `PORT_BASE` must be changed when running multiple instances simultaneously.
@@ -217,6 +218,7 @@ claude
 | Take a screenshot | `make browser-screenshot URL=https://example.com` |
 | Check volume status | `make volume-status` |
 | Adopt orphan volumes | `make volume-adopt FROM=docker-claude` |
+| iOS development (macOS) | `make host-bind-mobile-up` |
 
 ## Multi-Instance Setup
 
@@ -376,6 +378,9 @@ make restart            # Stop + start
 make solana-up          # Start with Solana profile
 make mobile-up          # Start with Mobile profile
 make all-up             # Start everything
+make host-bind-up       # Start with host bind mount (core)
+make host-bind-mobile-up # Start with host bind + Mobile (iOS dev)
+make host-bind-solana-up # Start with host bind + Solana
 
 # Interactive
 make shell              # Open bash shell in docker-claude
@@ -639,6 +644,77 @@ npx react-native init MyApp && cd MyApp && npx react-native run-android
 
 > **Note:** iOS builds require macOS + Xcode and cannot run in Docker. Use your Mac host for iOS builds.
 
+### iOS Development (macOS only)
+
+For iOS development with Flutter, you need Xcode on your Mac host. This project supports a hybrid workflow: **edit code in the container** while **building/debugging on the host**.
+
+**Why this works:**
+- iOS builds need Xcode → only possible on macOS host
+- iOS Simulator has no network protocol (like ADB) for remote debugging
+- Bind mounting `./workspace` lets host and container share the same files
+
+#### Quick Setup
+
+```bash
+# 1. Start with host bind mount (creates ./workspace if missing)
+make host-bind-mobile-up
+
+# 2. Create Flutter app inside container
+make shell-mobile
+cd /workspace
+flutter create my_app
+
+# 3. On your Mac host, run iOS debugging
+cd ./workspace/my_app
+flutter devices        # Should show iOS Simulator
+flutter run -d iPhone  # Uses host Xcode + Simulator
+```
+
+#### Day-to-Day Workflow
+
+```bash
+# Terminal 1: Container (development)
+make shell-mobile
+cd /workspace/my_app
+flutter pub get
+# Edit code, run tests, etc.
+
+# Terminal 2: Mac Host (iOS debugging)
+cd ./workspace/my_app
+flutter run -d iPhone  # Hot reload works across both terminals
+```
+
+#### Commands Reference
+
+| Command | Description |
+|---|---|
+| `make host-bind-up` | Start with host bind mount (core only) |
+| `make host-bind-mobile-up` | Start with host bind + Mobile profile |
+| `make host-bind-solana-up` | Start with host bind + Solana profile |
+
+#### Custom Workspace Path
+
+By default, workspace is `./workspace` inside the project folder. Set `HOST_WORKSPACE_PATH` in `.env` for a different location:
+
+```bash
+# In .env
+HOST_WORKSPACE_PATH=/Users/yourname/projects/flutter-apps
+
+# Start
+make host-bind-mobile-up
+```
+
+#### Comparison: Named Volume vs Host Bind
+
+| Aspect | Named Volume (Default) | Host Bind Mount (iOS Dev) |
+|--------|------------------------|---------------------------|
+| Volume | Docker-managed (isolated) | Host folder `./workspace` |
+| Start command | `make mobile-up` | `make host-bind-mobile-up` |
+| Code location | Inside container only | Shared: host + container |
+| iOS debugging | Not possible | Host `flutter run -d iPhone` |
+| Android debugging | Container + ADB | Same (works in both modes) |
+| Backup | `make backup` | Use host git/backup tools |
+
 ## Custom Builds
 
 Build with only the stacks you need:
@@ -898,6 +974,7 @@ docker-claude/
 ├── docker-compose.debug.yml       # Debug override (SYS_PTRACE + seccomp)
 ├── docker-compose.dind.yml        # DinD override (Docker socket mount)
 ├── docker-compose.gpu.yml         # GPU override (NVIDIA device passthrough)
+├── docker-compose.host-bind.yml   # Host bind mount override (iOS dev)
 ├── docker-compose.windows.yml     # Windows-specific overrides
 ├── docker-compose.yml             # Main compose (services, volumes, ports)
 ├── marketplace/                   # Default (empty) plugin marketplace fallback

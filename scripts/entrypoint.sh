@@ -122,10 +122,23 @@ else
 fi
 
 # -- Claude Code Settings --
-if [ -f "/etc/claude-code/settings.json" ]; then
-    # Symlink mounted settings into Claude Code's expected location
-    ln -sf /etc/claude-code/settings.json /home/dev/.claude/settings.json 2>/dev/null || true
-    echo -e "${GREEN}✓${NC} Claude Code: Global settings loaded"
+SETTINGS_SRC="/etc/claude-code/settings.json"
+SETTINGS_DEST="/home/dev/.claude/settings.json"
+
+# Remove symlink if it exists (it points to read-only mount, prevents plugin installs)
+if [ -L "$SETTINGS_DEST" ]; then
+    rm "$SETTINGS_DEST"
+    echo -e "${YELLOW}!${NC} Removed settings symlink (read-only mount)"
+fi
+
+if [ -f "$SETTINGS_SRC" ]; then
+    # Copy only if settings doesn't exist (preserves container modifications)
+    if [ ! -f "$SETTINGS_DEST" ]; then
+        cp "$SETTINGS_SRC" "$SETTINGS_DEST"
+        echo -e "${GREEN}✓${NC} Claude Code: Settings initialized from host"
+    else
+        echo -e "${GREEN}✓${NC} Claude Code: Settings present (preserved from volume)"
+    fi
 else
     echo -e "${YELLOW}!${NC} Claude Code: No global settings (using defaults)"
 fi
@@ -140,68 +153,63 @@ sync_plugin_content() {
     [ -d "$marketplace" ] || return 0
     [ -f "$installed_json" ] || return 0
 
-    # Extract installed plugin names (keys of the JSON object)
-    local plugin_names
-    plugin_names=$(grep -oP '"([^"]+)"\s*:' "$installed_json" 2>/dev/null | grep -oP '"[^"]+"' | tr -d '"' | grep -v '^\s*$' || true)
-    [ -n "$plugin_names" ] || return 0
+    local fixed=0 ok=0 skipped=0
+    # Process each installed plugin using jq to extract name and installPath
+    while IFS= read -r plugin_entry; do
+        local plugin_name=$(echo "$plugin_entry" | jq -r '.name')
+        local install_path=$(echo "$plugin_entry" | jq -r '.installPath')
 
-    local fixed=0 ok=0
-    for plugin_name in $plugin_names; do
-        local plugin_dir="$plugins_dir/$plugin_name"
-        # Create directory if it doesn't exist
-        if [ ! -d "$plugin_dir" ]; then
-            mkdir -p "$plugin_dir"
-            echo -e "    Created plugin directory: ${plugin_name}"
+        # Skip if installPath is empty
+        [ -n "$install_path" ] || continue
+
+        # Check if content already exists at installPath
+        if [ -d "$install_path" ] && [ -n "$(ls -A "$install_path" 2>/dev/null)" ]; then
+            ok=$((ok + 1))
+            continue
         fi
 
-        # Check if directory has actual files (not just empty)
-        if [ -z "$(ls -A "$plugin_dir" 2>/dev/null)" ]; then
-            # Directory exists but is empty — find the source in marketplace
-            if [ -d "$marketplace/$plugin_name" ]; then
-                cp -rn "$marketplace/$plugin_name/." "$plugin_dir/" 2>/dev/null && \
-                    echo -e "    ${GREEN}✓${NC} Synced content: ${plugin_name}" || \
-                    echo -e "    ${RED}✗${NC} Failed to sync: ${plugin_name}"
-                fixed=$((fixed + 1))
-            else
-                # Plugin name might differ from marketplace directory — try all subdirs
-                # INCLUDING the nested plugins/ subdirectory
-                local found=0
-                for src_dir in "$marketplace"/*/ "$marketplace/plugins"/*/ 2>/dev/null; do
-                    [ -d "$src_dir" ] || continue
-                    local src_name
-                    src_name=$(basename "$src_dir")
-                    # Check if this marketplace dir matches (same name OR contains matching plugin in plugin.json)
-                    if [ "$src_name" = "$plugin_name" ] || \
-                       grep -ql "$plugin_name" "$src_dir/plugin.json" 2>/dev/null; then
-                        cp -rn "$src_dir." "$plugin_dir/" 2>/dev/null && \
-                            echo -e "    ${GREEN}✓${NC} Synced content: ${plugin_name} (from ${src_name})" && \
-                            found=1 && break
-                    fi
-                done
-                if [ "$found" -eq 0 ]; then
-                    echo -e "    ${RED}✗${NC} No source found in marketplace for: ${plugin_name}"
-                else
-                    fixed=$((fixed + 1))
+        # Only sync from local marketplace if installPath suggests local marketplace origin
+        # Remote marketplace plugins (GitHub, etc.) are downloaded during install
+        if [[ "$install_path" == *"/etc/claude-code/marketplace"* ]] || [[ "$install_path" == "$plugins_dir/$plugin_name"* ]]; then
+            # Try to find source in marketplace and sync
+            local found=0
+            shopt -s nullglob
+            for src_dir in "$marketplace"/*/ "$marketplace/plugins"/*/; do
+                shopt -u nullglob
+                [ -d "$src_dir" ] || continue
+                local src_name=$(basename "$src_dir")
+                # Match by name or plugin.json
+                if [ "$src_name" = "$plugin_name" ] || \
+                   grep -ql "$plugin_name" "$src_dir/plugin.json" 2>/dev/null; then
+                    mkdir -p "$install_path"
+                    cp -rn "$src_dir." "$install_path/" 2>/dev/null && \
+                        echo -e "    ${GREEN}✓${NC} Synced content: ${plugin_name}" && \
+                        found=1 && fixed=$((fixed + 1)) && break
                 fi
+                shopt -s nullglob
+            done
+            shopt -u nullglob
+            if [ "$found" -eq 0 ]; then
+                echo -e "    ${YELLOW}!${NC} No source in local marketplace for: ${plugin_name}"
+                skipped=$((skipped + 1))
             fi
         else
-            ok=$((ok + 1))
+            # Plugin from remote marketplace - should have been downloaded during install
+            skipped=$((skipped + 1))
+            echo -e "    ${YELLOW}!${NC} Plugin from remote marketplace: ${plugin_name} (not synced from local)"
         fi
-    done
+    done < <(jq -c '.plugins | to_entries[] | {name: .key, installPath: .value[0].installPath}' "$installed_json" 2>/dev/null)
 
-    # Print summary if any work was done
-    if [ "$fixed" -gt 0 ]; then
-        echo -e "    ${GREEN}→${NC} Synced ${fixed} plugin(s), ${ok} already OK"
+    # Print summary
+    if [ "$ok" -gt 0 ]; then
+        echo -e "    ${GREEN}→${NC} ${ok} already OK"
     fi
-
-    # Warn about any empty plugin directories
-    for plugin_name in $plugin_names; do
-        local plugin_dir="$plugins_dir/$plugin_name"
-        if [ -d "$plugin_dir" ] && [ -z "$(ls -A "$plugin_dir" 2>/dev/null)" ]; then
-            echo -e "    ${YELLOW}!${NC} Plugin still empty: ${plugin_name}"
-            echo -e "      Run: ${BLUE}make reset-plugins && make down && make up${NC}"
-        fi
-    done
+    if [ "$fixed" -gt 0 ]; then
+        echo -e "    ${GREEN}→${NC} Synced ${fixed} from marketplace"
+    fi
+    if [ "$skipped" -gt 0 ]; then
+        echo -e "    ${BLUE}→${NC} ${skipped} from remote marketplaces"
+    fi
 }
 
 if [ -d "/etc/claude-code/marketplace" ] && [ "$(ls -A /etc/claude-code/marketplace 2>/dev/null | grep -v .gitkeep)" ]; then
@@ -211,8 +219,8 @@ if [ -d "/etc/claude-code/marketplace" ] && [ "$(ls -A /etc/claude-code/marketpl
     # Check installed plugins and their content status
     INSTALLED_JSON="/home/dev/.claude/plugins/installed_plugins.json"
     if [ -f "$INSTALLED_JSON" ]; then
-        INSTALLED_COUNT=$(grep -oP '"([^"]+)"\s*:' "$INSTALLED_JSON" 2>/dev/null | grep -oP '"[^"]+"' | tr -d '"' | grep -v '^\s*$' | wc -l | tr -d ' ')
-        echo -e "    ${INSTALLED_COUNT} plugin(s) installed"
+        INSTALLED_COUNT=$(jq -r '.plugins | keys | length' "$INSTALLED_JSON" 2>/dev/null || echo 0)
+        [ "$INSTALLED_COUNT" -gt 0 ] && echo -e "    ${INSTALLED_COUNT} plugin(s) installed"
         sync_plugin_content
     else
         echo -e "    Register with: ${BLUE}claude plugin marketplace add /etc/claude-code/marketplace${NC}"

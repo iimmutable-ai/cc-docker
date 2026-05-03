@@ -59,7 +59,7 @@ services:
       # Go
       - GOPATH=/home/${DEV_USER:-dev}/go
       - GOROOT=/usr/local/go
-      # .NET
+      # .NET (only active when INCLUDE_DOTNET=true)
       - DOTNET_ROOT=/usr/local/dotnet
       - DOTNET_CLI_TELEMETRY_OPTOUT=1
       # Rust
@@ -92,8 +92,8 @@ services:
     # Default PORT_BASE=41 → 41xxx, use PORT_BASE=42 for second instance
     ports:
       - "127.0.0.1:${PORT_BASE:-41}300:3000"     # React / Express
-      - "127.0.0.1:${PORT_BASE:-41}500:5000"     # ASP.NET HTTP
-      - "127.0.0.1:${PORT_BASE:-41}501:5001"     # ASP.NET HTTPS
+      - "127.0.0.1:${PORT_BASE:-41}500:5000"     # ASP.NET HTTP (only active when INCLUDE_DOTNET=true)
+      - "127.0.0.1:${PORT_BASE:-41}501:5001"     # ASP.NET HTTPS (only active when INCLUDE_DOTNET=true)
       - "127.0.0.1:${PORT_BASE:-41}517:5173"     # Vite
       - "127.0.0.1:${PORT_BASE:-41}808:8080"     # Go / Generic
       - "127.0.0.1:${PORT_BASE:-41}881:8081"     # Vue / Metro

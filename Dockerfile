@@ -22,7 +22,7 @@ ARG INCLUDE_GOLANG=true
 ARG INCLUDE_RUST=true
 ARG INCLUDE_BROWSER=true
 ARG INCLUDE_GPU=false
-ARG GO_VERSION=1.23.4
+ARG GO_VERSION=1.26.2
 ARG DEV_UID=1000
 ARG DEV_GID=1000
 ARG DEV_USER=dev
@@ -268,7 +268,7 @@ RUN chmod 0440 /etc/sudoers.d/dev
 # =============================================================================
 # Configure PATH
 # =============================================================================
-ENV PATH=/usr/local/cargo/bin:/usr/local/go/bin:/home/${DEV_USER}/go/bin:/usr/local/dotnet:$PATH
+ENV PATH=/usr/local/cargo/bin:/usr/local/go/bin:/home/${DEV_USER}/go/bin:$PATH
 
 # =============================================================================
 # Config files

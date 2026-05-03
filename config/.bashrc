@@ -15,11 +15,13 @@ export GOROOT=/usr/local/go
 export GOPATH=$HOME/go
 export PATH=$GOROOT/bin:$GOPATH/bin:$PATH
 
-# -- .NET --
-export DOTNET_ROOT=/usr/local/dotnet
-export PATH=$DOTNET_ROOT:$PATH
-export DOTNET_CLI_TELEMETRY_OPTOUT=1
-export DOTNET_NOLOGO=1
+# -- .NET (if installed) --
+if [ -x "/usr/local/dotnet/dotnet" ]; then
+    export DOTNET_ROOT=/usr/local/dotnet
+    export PATH=$DOTNET_ROOT:$PATH
+    export DOTNET_CLI_TELEMETRY_OPTOUT=1
+    export DOTNET_NOLOGO=1
+fi
 
 # -- Rust --
 export RUSTUP_HOME=/usr/local/rustup

@@ -19,6 +19,8 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+export BROWSER=echo  # Print URLs to terminal (no display server by default)
+
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}  Docker Claude — Development Environment${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -51,6 +53,10 @@ if [ -f "/home/dev/.gitconfig" ]; then
         while read -r key; do
             git config -f /home/dev/.gitconfig.container --unset-all "$key" 2>/dev/null || true
         done
+    # Re-enable gh as credential helper if gh is authenticated inside the container
+    if command -v gh &> /dev/null && gh auth status &> /dev/null; then
+        git config -f /home/dev/.gitconfig.container credential.helper '!gh auth git-credential'
+    fi
     export GIT_CONFIG_GLOBAL="/home/dev/.gitconfig.container"
 fi
 
@@ -107,6 +113,18 @@ fi
 # -- Lazygit --
 if command -v lazygit &> /dev/null; then
     echo -e "${GREEN}✓${NC} Lazygit $(lazygit --version 2>/dev/null || echo 'installed')"
+fi
+
+# -- GitHub CLI --
+if command -v gh &> /dev/null; then
+    GH_VERSION=$(gh --version 2>/dev/null | head -1 | awk '{print $3}')
+    if gh auth status &> /dev/null; then
+        GH_USER=$(gh api user --jq .login 2>/dev/null)
+        echo -e "${GREEN}✓${NC} GitHub CLI ${GH_VERSION} (authenticated: ${GH_USER})"
+    else
+        echo -e "${YELLOW}!${NC} GitHub CLI ${GH_VERSION} (not authenticated)"
+        echo -e "    Run: ${BLUE}gh auth login${NC} to enable git push/pull over HTTPS"
+    fi
 fi
 
 # -- Solana (if available) --

@@ -242,6 +242,20 @@ RUN ARCH="$(dpkg --print-architecture)" \
     && rm /tmp/starship.tar.gz \
     && echo ">>> Starship v${STARSHIP_VERSION} installed"
 
+# -- GitHub CLI (gh) --
+# Architecture mapping: amd64 → amd64, arm64 → arm64
+ARG GH_VERSION=2.67.0
+RUN ARCH="$(dpkg --print-architecture)" \
+    && GH_ARCH="amd64" \
+    && if [ "$ARCH" = "arm64" ]; then GH_ARCH="arm64"; fi \
+    && GH_TAR="gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz" \
+    && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_TAR}" \
+       -o /tmp/gh.tar.gz \
+    && tar -xzf /tmp/gh.tar.gz -C /tmp \
+    && mv /tmp/gh_${GH_VERSION}_linux_${GH_ARCH}/bin/gh /usr/local/bin/gh \
+    && rm -rf /tmp/gh.tar.gz /tmp/gh_${GH_VERSION}_linux_${GH_ARCH} \
+    && echo ">>> GitHub CLI v${GH_VERSION} installed"
+
 # =============================================================================
 # Create non-root dev user
 # =============================================================================

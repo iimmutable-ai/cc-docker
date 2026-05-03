@@ -9,7 +9,8 @@
         backup restore backup-list backup-clean backup-enc restore-enc \
         install-plugins reset-plugins sync-plugins \
         browser browser-start browser-stop browser-test browser-screenshot \
-        volume-check volume-status volume-adopt
+        volume-check volume-status volume-adopt \
+        gh-auth gh-status
 
 # =============================================================================
 # Environment Setup
@@ -210,6 +211,12 @@ claude: .env ## Launch Claude Code CLI
 
 login: .env ## Run Claude OAuth login
 	$(COMPOSE) exec cc-docker bash -c '. /usr/local/nvm/nvm.sh && claude login'
+
+gh-auth: .env ## Run 'gh auth login' interactively inside container
+	$(COMPOSE) exec cc-docker bash -c 'gh auth login'
+
+gh-status: .env ## Show GitHub CLI auth status
+	$(COMPOSE) exec cc-docker bash -c 'gh auth status'
 
 install-plugins: .env ## Register marketplace and sync plugin content
 	$(COMPOSE) exec cc-docker bash -c '. /usr/local/nvm/nvm.sh && claude plugin marketplace add /etc/claude-code/marketplace 2>/dev/null; claude plugin sync 2>/dev/null || /entrypoint.sh --sync-plugins; claude plugin list'

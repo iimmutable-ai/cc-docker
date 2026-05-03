@@ -80,6 +80,11 @@ if [ -f /usr/share/bash-completion/bash_completion ]; then
     . /usr/share/bash-completion/bash_completion
 fi
 
+# -- GitHub CLI completion --
+if command -v gh &> /dev/null; then
+    eval "$(gh completion -s bash)" 2>/dev/null
+fi
+
 # -- Auto-fix permissions before each prompt --
 # This catches files copied via docker cp while shell is active
 PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}_quick_fix_permissions"
@@ -103,3 +108,17 @@ _quick_fix_permissions
 
 # -- Workspace shortcut --
 cd /workspace 2>/dev/null || true
+
+# -- GitHub CLI credential helper auto-configure --
+if command -v gh &> /dev/null; then
+    if gh auth status &> /dev/null; then
+        # Auto-configure gh as git credential helper (picks up 'gh auth login' without restart)
+        if [ -n "$GIT_CONFIG_GLOBAL" ] && [ -f "$GIT_CONFIG_GLOBAL" ]; then
+            if ! git config -f "$GIT_CONFIG_GLOBAL" credential.helper 2>/dev/null | grep -q "gh auth git-credential"; then
+                git config -f "$GIT_CONFIG_GLOBAL" credential.helper '!gh auth git-credential'
+            fi
+        fi
+    else
+        echo -e "${YELLOW}GitHub CLI not authenticated.${NC} Run ${BLUE}gh auth login${NC} to enable git push/pull over HTTPS."
+    fi
+fi

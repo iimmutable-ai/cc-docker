@@ -1,6 +1,79 @@
-# Docker Claude — Dockerized Development Environment
+# cc-docker
 
-A fully virtualized, cross-platform development environment running Claude Code inside Docker. Supports TypeScript/JavaScript, Node.js, Express, React, React Native, Vue 3, ASP.NET Core, C#, Go, Rust, Solana, Flutter, and more.
+**Run Claude Code in a fully equipped, cross-platform Docker dev environment.**
+
+One container. Every runtime. Zero host pollution.
+
+<!-- Badges -->
+<p align="left">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="https://github.com/iimmutable/cc-docker/stargazers"><img src="https://img.shields.io/github/stars/iimmutable/cc-docker?style=social" alt="GitHub Stars" /></a>
+  <img src="https://img.shields.io/badge/platforms-Mac%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="Platforms" />
+  <img src="https://img.shields.io/badge/docker-compose-2DB567?logo=docker&logoColor=white" alt="Docker Compose" />
+  <a href="https://claude.ai/code"><img src="https://img.shields.io/badge/Built%20for-Claude%20Code-d45d29" alt="Built for Claude Code" /></a>
+</p>
+
+## Quick Start
+
+```bash
+git clone https://github.com/iimmutable/cc-docker.git && cd cc-docker
+cp .env.example .env && make build && make up && make claude
+```
+
+## Who Is This For?
+
+| You are… | cc-docker gives you… |
+|---|---|
+| AI-first developer | Ready-to-go Claude Code with every runtime pre-installed |
+| Polyglot engineer | Node, .NET, Go, Rust — switch stacks without installing anything |
+| Solana / Web3 dev | One-command Solana profile with Anchor + Rust BPF |
+| Mac ↔ Windows switcher | Identical environment on both platforms, zero reconfiguration |
+| Security-conscious | No host pollution, isolated volumes, encrypted backups |
+| Team collaborator | Reproducible dev setup — `git clone` and go |
+
+## Features
+
+| | | |
+|---|---|---|
+| AI-Ready | Claude Code pre-installed with OAuth + API key auth | Browser Built-In | Playwright + Chromium + noVNC visual browser |
+| Multi-Runtime | Node.js, .NET, Go, Rust in one image | Profiles | Solana, Mobile (Android/Flutter/RN) extensions |
+| Cross-Platform | Mac, Windows (WSL2), Linux — identical experience | Multi-Instance | Run multiple isolated instances simultaneously |
+| Security-First | Docker socket off by default, ports bound to localhost | Terminal Tools | Yazi, Lazygit, Starship prompt included |
+| Version Flexible | Switch Node/.NET/Go/Rust versions at runtime | VS Code Ready | Dev Container config included, extensions pre-configured |
+| GPU Support | NVIDIA CUDA runtime on Linux/WSL2 | iOS Workflow | Host bind mount for Flutter → Xcode on macOS |
+
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+  - [Step 0 — Get cc-docker](#step-0--get-cc-docker)
+  - [Step 1 — Install Docker Desktop](#step-1--install-docker-desktop)
+  - [Step 2 — Configure](#step-2--configure)
+  - [Step 3 — Build & Start](#step-3--build--start)
+  - [Step 4 — Verify](#step-4--verify)
+  - [Step 5 — Authenticate](#step-5--authenticate-if-using-oauth)
+  - [Step 6 — Register Marketplace](#step-6--register-marketplace-if-using-plugins)
+  - [Step 7 — Start Coding](#step-7--start-coding)
+  - [Quick Reference](#quick-reference)
+- [Multi-Instance Setup](#multi-instance-setup)
+- [Makefile Commands](#makefile-commands)
+- [Setup Options](#setup-options)
+- [Authentication](#authentication)
+- [Claude Code Configuration](#claude-code-configuration)
+- [Port Mappings](#port-mappings)
+- [Working with Projects](#working-with-projects)
+- [Optional Profiles](#optional-profiles)
+- [Custom Builds](#custom-builds)
+- [VS Code Dev Container](#vs-code-dev-container)
+- [GPU / CUDA Support](#gpu--cuda-support)
+- [Cross-Platform: Mac ↔ Windows](#cross-platform-mac--windows)
+- [Version Management](#version-management)
+- [Backup & Restore](#backup--restore)
+- [Security](#security)
+- [Troubleshooting](#troubleshooting)
+- [Project Structure](#project-structure)
+- [Co-Developed with](#co-developed-with)
+- [License](#license)
 
 ## Architecture
 
@@ -1006,3 +1079,9 @@ Built using [Claude Code](https://claude.ai/code) — Anthropic's official CLI f
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+## Discover cc-docker
+
+`#claudecode` `#cc` `#vibecoding` `#agenticcoding` `#docker` `#container` `#ai` `#devtools` `#developer-experience` `#solana` `#flutter` `#rust` `#go` `#dotnet` `#nodejs`

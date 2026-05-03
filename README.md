@@ -38,7 +38,7 @@ cp .env.example .env && make build && make up && make claude
 | AI-Ready | Claude Code pre-installed with OAuth + API key auth | Browser Built-In | Playwright + Chromium + noVNC visual browser |
 | Multi-Runtime | Node.js, .NET, Go, Rust in one image | Profiles | Solana, Mobile (Android/Flutter/RN) extensions |
 | Cross-Platform | Mac, Windows (WSL2), Linux — identical experience | Multi-Instance | Run multiple isolated instances simultaneously |
-| Security-First | Docker socket off by default, ports bound to localhost | Terminal Tools | Yazi, Lazygit, Starship prompt included |
+| Security-First | Docker socket off by default, ports bound to localhost | Terminal Tools | Yazi, Lazygit, Starship prompt, GitHub CLI included |
 | Version Flexible | Switch Node/.NET/Go/Rust versions at runtime | VS Code Ready | Dev Container config included, extensions pre-configured |
 | GPU Support | NVIDIA CUDA runtime on Linux/WSL2 | iOS Workflow | Host bind mount for Flutter → Xcode on macOS |
 
@@ -95,12 +95,12 @@ cp .env.example .env && make build && make up && make claude
 │  Ubuntu 24.04 LTS base + Docker CLI + core utils             │
 │  + nvm + Node LTS + pnpm/yarn/tsx          (INCLUDE_NODE)    │
 │  + .NET 8 & 9 SDK                          (INCLUDE_DOTNET)  │
-│  + Go 1.23 + gopls + delve                 (INCLUDE_GOLANG)  │
+│  + Go 1.26 + gopls + delve                 (INCLUDE_GOLANG)  │
 │  + rustup + stable + rust-analyzer/clippy  (INCLUDE_RUST)    │
 │  + Playwright + Chromium + noVNC/Xvfb      (INCLUDE_BROWSER) │
 │  + NVIDIA CUDA runtime                     (INCLUDE_GPU)     │
 │  + Claude Code CLI + non-root user + SSH/Git                 │
-│  + Yazi + Lazygit + Starship (terminal tools)                │
+│  + Yazi + Lazygit + Starship + GitHub CLI (terminal tools)   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -214,10 +214,11 @@ Expected output:
 Node.js:  v24.x.x
 npm:      11.x.x
 .NET:     9.x.x
-Go:       go version go1.23.x
+Go:       go version go1.26.x
 Rust:     rustc 1.x.x
 Docker:   Docker version 2x.x.x
 Git:      git version 2.x.x
+GitHub:   gh version 2.67.0
 Claude:   2.1.77 (Claude Code)
 
 === Auth Status ===
@@ -274,6 +275,8 @@ claude
 | Open a shell | `make shell` |
 | Launch Claude Code | `make claude` |
 | OAuth login | `make login` |
+| GitHub CLI login | `make gh-auth` |
+| GitHub CLI status | `make gh-status` |
 | Check runtime health | `make health` |
 | Backup your projects | `make backup` |
 | Encrypted backup | `make backup-enc` |
@@ -459,6 +462,8 @@ make host-bind-solana-up # Start with host bind + Solana
 make shell              # Open bash shell in cc-docker
 make claude             # Launch Claude Code CLI
 make login              # Run Claude OAuth login
+make gh-auth            # Run GitHub CLI auth login
+make gh-status          # Show GitHub CLI auth status
 make shell-solana       # Open shell in Solana container
 make shell-mobile       # Open shell in Mobile container
 
@@ -539,7 +544,18 @@ Then restart: `make down && make up`
 make login
 ```
 
-OAuth tokens are persisted in the `claude-auth` volume — you only need to login once.
+OAuth tokens are persisted in the `vol-home` volume — you only need to login once.
+
+### GitHub CLI Authentication
+
+The container includes GitHub CLI (`gh`) for git operations over HTTPS:
+
+```bash
+make gh-auth          # Interactive login (prints URL to terminal)
+make gh-status        # Check auth status
+```
+
+Once authenticated, `gh` is automatically configured as a git credential helper, enabling `git push`/`pull` over HTTPS without additional setup.
 
 ## Claude Code Configuration
 
@@ -875,7 +891,7 @@ curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 7.0
 rustup install nightly && rustup default nightly
 
 # Go — install a different version
-curl -fsSL "https://go.dev/dl/go1.22.0.linux-$(dpkg --print-architecture).tar.gz" \
+curl -fsSL "https://go.dev/dl/go1.24.0.linux-$(dpkg --print-architecture).tar.gz" \
   | sudo tar -C /usr/local -xzf -
 ```
 

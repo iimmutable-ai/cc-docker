@@ -277,7 +277,7 @@ COPY config/.bashrc /home/${DEV_USER}/.bashrc
 COPY config/starship.toml /home/${DEV_USER}/.config/starship.toml
 
 # Skeleton for home volume initialization on first start
-RUN mkdir -p /etc/skel-dev/.config /etc/skel-dev/.ssh /etc/skel-dev/go
+RUN mkdir -p /etc/skel-dev/.config/lazygit /etc/skel-dev/.ssh /etc/skel-dev/go
 COPY config/.bashrc /etc/skel-dev/.bashrc
 COPY config/starship.toml /etc/skel-dev/.config/starship.toml
 

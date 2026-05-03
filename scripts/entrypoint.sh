@@ -59,6 +59,8 @@ if [ -d "/usr/local/go" ]; then
     echo -e "${GREEN}✓${NC} Go $(go version 2>/dev/null | awk '{print $3}' || echo 'installed')"
 fi
 
+mkdir -p /home/dev/.config/lazygit
+
 # -- Rust --
 if [ -d "/usr/local/cargo" ]; then
     export PATH="/usr/local/cargo/bin:$PATH"

@@ -38,6 +38,22 @@ if [ ! -d "/home/dev/.claude" ] && [ -d "/mnt/migrate-auth/.claude" ]; then
     echo -e "${GREEN}✓${NC} Migrated data from legacy vol-claude-auth"
 fi
 
+# -- Git Config Fix --
+# Host .gitconfig may contain credential helpers (e.g. macOS gh CLI) that
+# don't exist inside the container. Create a writable copy with ALL helpers removed.
+if [ -f "/home/dev/.gitconfig" ]; then
+    cp /home/dev/.gitconfig /home/dev/.gitconfig.container
+    # Remove top-level credential helper
+    git config -f /home/dev/.gitconfig.container --unset-all credential.helper 2>/dev/null || true
+    # Remove URL-scoped credential helpers (e.g., credential.https://github.com.helper set by gh CLI)
+    git config -f /home/dev/.gitconfig.container --get-regexp 'credential\..+\.helper' 2>/dev/null | \
+        cut -d' ' -f1 | \
+        while read -r key; do
+            git config -f /home/dev/.gitconfig.container --unset-all "$key" 2>/dev/null || true
+        done
+    export GIT_CONFIG_GLOBAL="/home/dev/.gitconfig.container"
+fi
+
 # -- NVM --
 export NVM_DIR="/usr/local/nvm"
 if [ -s "$NVM_DIR/nvm.sh" ]; then

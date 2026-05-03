@@ -1076,6 +1076,15 @@ This project was developed with assistance from multiple AI systems:
 **Development Tool:**
 Built using [Claude Code](https://claude.ai/code) — Anthropic's official CLI for Claude.
 
+## Support This Project
+
+If you find cc-docker useful, consider buying me a coffee:
+
+| Network | Address |
+|---|---|
+| Solana (SOL) | `GjpzLx3aX1MvpMVprdZm2hSyzHTSFJAgjwChT1fM1uKv` |
+| Ethereum (USDC) | `0x0402e35252476230696dc639f502C14e4c92dfD6` |
+
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.

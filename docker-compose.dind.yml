@@ -11,24 +11,24 @@
 # =============================================================================
 
 services:
-  docker-claude:
+  cc-docker:
     volumes:
       - vol-projects:/workspace
-      - vol-claude-auth:/home/dev/.claude
+      - vol-home:/home/dev
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
       - ${HOME:-~}/.gitconfig:/home/dev/.gitconfig:ro
 
-  docker-claude-solana:
+  cc-docker-solana:
     volumes:
       - vol-projects:/workspace
-      - vol-claude-auth:/home/dev/.claude
+      - vol-home:/home/dev
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
 
-  docker-claude-mobile:
+  cc-docker-mobile:
     volumes:
       - vol-projects:/workspace
-      - vol-claude-auth:/home/dev/.claude
+      - vol-home:/home/dev
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent

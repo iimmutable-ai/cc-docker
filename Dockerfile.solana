@@ -3,7 +3,7 @@
 # Extends the main claude-dev image
 # =============================================================================
 
-ARG BASE_IMAGE=docker-claude
+ARG BASE_IMAGE=cc-docker
 FROM ${BASE_IMAGE}
 
 USER root

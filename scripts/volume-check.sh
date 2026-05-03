@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# volume-check.sh — Volume detection and migration for docker-claude
+# volume-check.sh — Volume detection and migration for cc-docker
 # =============================================================================
 #
 # Handles volume name changes when COMPOSE_PROJECT_NAME is modified.
@@ -34,12 +34,12 @@ NC='\033[0m' # No Color
 
 # Configuration
 VOLUME_STATE_FILE=".volume-state"
-PROJECT_NAME="${COMPOSE_PROJECT_NAME:-docker-claude}"
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-cc-docker}"
 PORT_BASE="${PORT_BASE:-41}"
 
 # Expected volume names (Docker Compose format: project_volume-name)
 VOLUME_PROJECTS="${PROJECT_NAME}_vol-projects"
-VOLUME_AUTH="${PROJECT_NAME}_vol-claude-auth"
+VOLUME_HOME="${PROJECT_NAME}_vol-home"
 
 # =============================================================================
 # Helper Functions
@@ -99,7 +99,7 @@ detect_current_volumes() {
     if volume_exists "$VOLUME_PROJECTS"; then
         has_projects=1
     fi
-    if volume_exists "$VOLUME_AUTH"; then
+    if volume_exists "$VOLUME_HOME"; then
         has_auth=1
     fi
 
@@ -255,7 +255,7 @@ adopt_from_project() {
     fi
 
     local source_projects="${source_project}_vol-projects"
-    local source_auth="${source_project}_vol-claude-auth"
+    local source_auth="${source_project}_vol-home"
 
     # Check source volumes exist
     if ! volume_exists "$source_projects" && ! volume_exists "$source_auth"; then
@@ -274,7 +274,7 @@ adopt_from_project() {
 
     # Adopt auth volume
     if volume_exists "$source_auth"; then
-        adopt_volume "$source_auth" "$VOLUME_AUTH"
+        adopt_volume "$source_auth" "$VOLUME_HOME"
     else
         log_warning "Source auth volume not found: $source_auth"
     fi
@@ -302,7 +302,7 @@ show_interactive_prompt() {
 
     echo ""
     echo "Project: ${PROJECT_NAME}"
-    echo "Expected volumes: ${VOLUME_PROJECTS}, ${VOLUME_AUTH}"
+    echo "Expected volumes: ${VOLUME_PROJECTS}, ${VOLUME_HOME}"
     echo ""
 
     log_warning "No volumes found for this project, but detected:"
@@ -324,14 +324,14 @@ show_interactive_prompt() {
     echo ""
     echo "Options:"
     echo "  [1] Start fresh — create new empty volumes"
-    echo "  [2] Adopt from docker-claude — copy data to new volumes"
+    echo "  [2] Adopt from cc-docker — copy data to new volumes"
 
     # Add options for other orphan projects
     local orphan_projects=""
     for vol in $orphans; do
         # Extract project name from volume (project_vol-name)
         local proj=$(echo "$vol" | sed 's/_vol-.*//')
-        if [[ -n "$proj" && "$proj" != "docker-claude" ]]; then
+        if [[ -n "$proj" && "$proj" != "cc-docker" ]]; then
             orphan_projects="$orphan_projects $proj"
         fi
     done
@@ -361,7 +361,7 @@ show_interactive_prompt() {
             return 0
             ;;
         2)
-            adopt_from_project "docker-claude"
+            adopt_from_project "cc-docker"
             return 0
             ;;
         [3-9])
@@ -415,7 +415,7 @@ run_check() {
     # Check current volumes
     local current_count=0
     if volume_exists "$VOLUME_PROJECTS"; then current_count=$((current_count + 1)); fi
-    if volume_exists "$VOLUME_AUTH"; then current_count=$((current_count + 1)); fi
+    if volume_exists "$VOLUME_HOME"; then current_count=$((current_count + 1)); fi
 
     if [[ $current_count -eq 2 ]]; then
         # Both volumes exist - proceed normally
@@ -424,7 +424,7 @@ run_check() {
     elif [[ $current_count -eq 1 ]]; then
         # Partial volumes exist
         log_warning "Partial volumes detected for ${PROJECT_NAME}"
-        echo "  Missing: $([[ ! $(volume_exists "$VOLUME_PROJECTS") ]] && echo "$VOLUME_PROJECTS")$([[ ! $(volume_exists "$VOLUME_AUTH") ]] && echo "$VOLUME_AUTH")"
+        echo "  Missing: $([[ ! $(volume_exists "$VOLUME_PROJECTS") ]] && echo "$VOLUME_PROJECTS")$([[ ! $(volume_exists "$VOLUME_HOME") ]] && echo "$VOLUME_HOME")"
         echo ""
         echo "Docker Compose will create missing volumes on 'make up'."
         return 0
@@ -452,7 +452,7 @@ run_check() {
         create_volume_state
         return 0
     elif [[ "$check_mode" == "auto-adopt" ]]; then
-        local adopt_from="${VOLUME_ADOPT_FROM:-docker-claude}"
+        local adopt_from="${VOLUME_ADOPT_FROM:-cc-docker}"
         log_info "Auto-adopt mode: adopting from $adopt_from"
         adopt_from_project "$adopt_from"
         return $?
@@ -484,12 +484,12 @@ run_status() {
     else
         echo "  ✗ ${VOLUME_PROJECTS} — NOT FOUND"
     fi
-    if volume_exists "$VOLUME_AUTH"; then
-        local size=$(get_volume_size "$VOLUME_AUTH")
-        local created=$(get_volume_created "$VOLUME_AUTH")
-        echo "  ✓ ${VOLUME_AUTH} — ${size} (created ${created})"
+    if volume_exists "$VOLUME_HOME"; then
+        local size=$(get_volume_size "$VOLUME_HOME")
+        local created=$(get_volume_created "$VOLUME_HOME")
+        echo "  ✓ ${VOLUME_HOME} — ${size} (created ${created})"
     else
-        echo "  ✗ ${VOLUME_AUTH} — NOT FOUND"
+        echo "  ✗ ${VOLUME_HOME} — NOT FOUND"
     fi
 
     echo ""

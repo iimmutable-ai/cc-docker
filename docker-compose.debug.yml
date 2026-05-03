@@ -10,19 +10,19 @@
 # =============================================================================
 
 services:
-  docker-claude:
+  cc-docker:
     cap_add:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
 
-  docker-claude-solana:
+  cc-docker-solana:
     cap_add:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
 
-  docker-claude-mobile:
+  cc-docker-mobile:
     cap_add:
       - SYS_PTRACE
     security_opt:

@@ -6,7 +6,7 @@
 #       This image supports Android builds and code editing/linting only.
 # =============================================================================
 
-ARG BASE_IMAGE=docker-claude
+ARG BASE_IMAGE=cc-docker
 FROM ${BASE_IMAGE}
 
 USER root

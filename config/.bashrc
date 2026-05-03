@@ -2,6 +2,9 @@
 # .bashrc — Claude Code Dev Environment
 # =============================================================================
 
+# -- Claude Code env cleanup --
+[[ -z "$ANTHROPIC_BASE_URL" ]] && unset ANTHROPIC_BASE_URL
+
 # -- NVM --
 export NVM_DIR="/usr/local/nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"

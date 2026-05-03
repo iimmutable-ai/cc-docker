@@ -23,6 +23,21 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${BLUE}  Docker Claude — Development Environment${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
+# -- Home Volume Initialization --
+# On first start, the named volume is empty — seed it from image skeleton
+if [ ! -f "/home/dev/.bashrc" ] && [ -f "/etc/skel-dev/.bashrc" ]; then
+    cp -a /etc/skel-dev/. /home/dev/
+    chown -R dev:dev /home/dev
+    echo -e "${GREEN}✓${NC} Home volume initialized from image"
+fi
+
+# -- Migrate legacy vol-claude-auth (if detected) --
+if [ ! -d "/home/dev/.claude" ] && [ -d "/mnt/migrate-auth/.claude" ]; then
+    cp -a /mnt/migrate-auth/. /home/dev/
+    chown -R dev:dev /home/dev
+    echo -e "${GREEN}✓${NC} Migrated data from legacy vol-claude-auth"
+fi
+
 # -- NVM --
 export NVM_DIR="/usr/local/nvm"
 if [ -s "$NVM_DIR/nvm.sh" ]; then

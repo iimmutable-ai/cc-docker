@@ -71,7 +71,7 @@ Backups can be encrypted with AES-256-CBC via openssl:
 make backup-enc
 
 # Restore from encrypted backup
-make restore-enc FILE=backups/docker-claude-backup_20260330.tar.gz.enc
+make restore-enc FILE=backups/cc-docker-backup_20260330.tar.gz.enc
 ```
 
 Unencrypted backups (`make backup`) are also available for convenience.

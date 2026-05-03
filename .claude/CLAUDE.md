@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Dockerized development environment running Claude Code CLI inside Docker. Provides Node.js, .NET, Go, Rust runtimes with built-in browser (Playwright + Chromium + noVNC), and optional Solana and Mobile profiles. Named volumes store code and auth persistently.
+Dockerized development environment running Claude Code CLI inside Docker. Provides Node.js, .NET, Go, Rust runtimes with built-in browser (Playwright + Chromium + noVNC), and optional Solana and Mobile profiles. Named volumes store code and user home persistently.
 
 ## Commands
 
@@ -27,7 +27,7 @@ make host-bind-up       # Start with host bind mount (core only)
 make host-bind-mobile-up # Start with host bind + Mobile profile (for iOS dev)
 make host-bind-solana-up # Start with host bind + Solana profile
 
-make shell              # Open bash in docker-claude
+make shell              # Open bash in cc-docker
 make claude             # Launch Claude Code CLI
 make login              # Run Claude OAuth login flow
 make shell-solana       # Shell in Solana container
@@ -64,7 +64,7 @@ This project supports running multiple isolated instances simultaneously. Each i
 
 ```bash
 # 1. Copy project to new location
-cp -r /path/to/docker-claude /path/to/trial-claude
+cp -r /path/to/cc-docker /path/to/trial-claude
 cd /path/to/trial-claude
 
 # 2. Create .env with unique settings
@@ -82,10 +82,10 @@ make up
 
 | Resource | First Instance | Second Instance |
 |----------|---------------|-----------------|
-| Project name | `docker-claude` | `trial-claude` |
-| Container | `docker-claude-docker-claude-1` | `trial-claude-docker-claude-1` |
-| Projects volume | `docker-claude_vol-projects` | `trial-claude_vol-projects` |
-| Auth volume | `docker-claude_vol-claude-auth` | `trial-claude_vol-claude-auth` |
+| Project name | `cc-docker` | `trial-claude` |
+| Container | `cc-docker-cc-docker-1` | `trial-claude-cc-docker-1` |
+| Projects volume | `cc-docker_vol-projects` | `trial-claude_vol-projects` |
+| Home volume | `cc-docker_vol-home` | `trial-claude_vol-home` |
 | Ports | 41xxx | 42xxx |
 
 ## iOS Development Workflow (macOS)
@@ -114,7 +114,7 @@ flutter run -d iPhone
 
 - `docker-compose.host-bind.yml` replaces named volume with host bind mount
 - `HOST_WORKSPACE_PATH` defaults to `./workspace` (configurable in `.env`)
-- Auth volume still uses named volume (credentials shouldn't sync to host)
+- Home volume still uses named volume (credentials shouldn't sync to host)
 - Named volume mode remains default — host bind only when explicitly used
 
 ## Architecture
@@ -141,11 +141,13 @@ docker compose build --build-arg INCLUDE_DOTNET=false --build-arg INCLUDE_RUST=f
 
 Two named volumes (fully virtualized, no host bind mounts), prefixed by `COMPOSE_PROJECT_NAME`:
 - `{project}_vol-projects` → `/workspace` — code, dependencies, caches
-- `{project}_vol-claude-auth` → `/home/dev/.claude` — OAuth credentials
+- `{project}_vol-home` → `/home/dev` — user home: auth, config, Go workspace, SSH
 
-Default (COMPOSE_PROJECT_NAME=docker-claude):
-- `docker-claude_vol-projects` → `/workspace`
-- `docker-claude_vol-claude-auth` → `/home/dev/.claude`
+Default (COMPOSE_PROJECT_NAME=cc-docker):
+- `cc-docker_vol-projects` → `/workspace`
+- `cc-docker_vol-home` → `/home/dev`
+
+On first start, `/home/dev` is seeded from `/etc/skel-dev/` in the image (`.bashrc`, `.config/starship.toml`, `.ssh/`, `go/`). If a legacy `vol-claude-auth` volume is detected, its contents are migrated into `vol-home/.claude`.
 
 Files enter/exit via:
 - `git clone` inside container
@@ -158,7 +160,7 @@ Optional profiles extend the base image:
 - `--profile solana` → Dockerfile.solana (Solana CLI + Anchor + Rust BPF target)
 - `--profile mobile` → Dockerfile.mobile (Android SDK + Flutter + React Native CLI)
 
-Both inherit from `docker-claude:latest` via `ARG BASE_IMAGE=docker-claude`.
+Both inherit from `cc-docker:latest` via `ARG BASE_IMAGE=cc-docker`.
 
 ### Port Convention
 
@@ -175,10 +177,11 @@ Map defined in docker-compose.yml `ports:` section with `${PORT_BASE:-41}` subst
 ### Entrypoint Logic
 
 `entrypoint.sh` handles:
-1. NVM initialization (sources `/usr/local/nvm/nvm.sh`)
-2. SSH agent forwarding (Mac: socket mount; Windows: key mount + local agent)
-3. Claude auth detection (API key or OAuth credentials)
-4. Runtime status display
+1. Home volume initialization (seeds from `/etc/skel-dev/` on first start, migrates legacy `vol-claude-auth`)
+2. NVM initialization (sources `/usr/local/nvm/nvm.sh`)
+3. SSH agent forwarding (Mac: socket mount; Windows: key mount + local agent)
+4. Claude auth detection (API key or OAuth credentials)
+5. Runtime status display
 
 All shells must source NVM first for Node commands:
 ```bash

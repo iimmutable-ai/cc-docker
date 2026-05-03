@@ -1,7 +1,7 @@
 {
   "name": "Claude Code Dev Environment",
   "dockerComposeFile": ["../docker-compose.yml"],
-  "service": "claude-dev",
+  "service": "cc-docker",
   "workspaceFolder": "/workspace",
 
   // Run as the dev user

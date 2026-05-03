@@ -26,19 +26,19 @@
 # =============================================================================
 
 services:
-  docker-claude:
+  cc-docker:
     volumes:
       # Replace named volume with host bind mount
       - ${HOST_WORKSPACE_PATH:-./workspace}:/workspace:cached
-      # Keep auth volume (credentials shouldn't sync to host)
-      - vol-claude-auth:/home/${DEV_USER:-dev}/.claude
+      # User home persistence (auth, config, Go workspace, SSH)
+      - vol-home:/home/${DEV_USER:-dev}
 
-  docker-claude-solana:
+  cc-docker-solana:
     volumes:
       - ${HOST_WORKSPACE_PATH:-./workspace}:/workspace:cached
-      - vol-claude-auth:/home/${DEV_USER:-dev}/.claude
+      - vol-home:/home/${DEV_USER:-dev}
 
-  docker-claude-mobile:
+  cc-docker-mobile:
     volumes:
       - ${HOST_WORKSPACE_PATH:-./workspace}:/workspace:cached
-      - vol-claude-auth:/home/${DEV_USER:-dev}/.claude
+      - vol-home:/home/${DEV_USER:-dev}

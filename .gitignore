@@ -19,3 +19,6 @@ Desktop.ini
 
 # Docker build cache
 .docker/
+
+# Dev artifacts (auto-excluded by merge-trunk)
+plans/

@@ -10,13 +10,13 @@ A fully virtualized, cross-platform development environment running Claude Code 
 │                    Project: ${COMPOSE_PROJECT_NAME}          │
 │                                                              │
 │  SERVICES                                                    │
-│  ├── docker-claude          (default)  Core dev environment  │
-│  ├── docker-claude-solana   (profile)  Solana + Anchor       │
-│  └── docker-claude-mobile   (profile)  Android SDK/Flutter/RN│
+│  ├── cc-docker          (default)  Core dev environment  │
+│  ├── cc-docker-solana   (profile)  Solana + Anchor       │
+│  └── cc-docker-mobile   (profile)  Android SDK/Flutter/RN│
 │                                                              │
 │  VOLUMES (prefixed by project name)                          │
 │  ├── {project}_vol-projects  →  /workspace  (code+deps)     │
-│  └── {project}_vol-claude-auth → ~/.claude  (auth)          │
+│  └── {project}_vol-home      →  /home/dev   (user home)     │
 │                                                              │
 │  IMAGE (conditional install via build args)                   │
 │  Ubuntu 24.04 LTS base + Docker CLI + core utils             │
@@ -33,11 +33,11 @@ A fully virtualized, cross-platform development environment running Claude Code 
 
 ## Getting Started
 
-### Step 0 — Get docker-claude
+### Step 0 — Get cc-docker
 
 ```bash
-git clone https://github.com/iimmutable/docker-claude.git
-cd docker-claude
+git clone https://github.com/iimmutable/cc-docker.git
+cd cc-docker
 ```
 
 ### Step 1 — Install Docker Desktop
@@ -64,7 +64,7 @@ Edit `.env`:
 
 ```bash
 # Multi-Instance Configuration (REQUIRED for parallel instances)
-COMPOSE_PROJECT_NAME=docker-claude    # Change for each instance (e.g., trial-claude)
+COMPOSE_PROJECT_NAME=cc-docker    # Change for each instance (e.g., trial-claude)
 PORT_BASE=41                          # Use 42 for second instance, 43 for third
 
 # Auth (pick one):
@@ -92,10 +92,10 @@ CLAUDE_MARKETPLACE_PATH=/path/to/your/marketplace
 
 | Variable | Required | Description |
 |---|---|---|
-| `COMPOSE_PROJECT_NAME` | No* | Docker Compose project name (namespaces containers, volumes, networks). Change for each parallel instance. Default: `docker-claude`. |
+| `COMPOSE_PROJECT_NAME` | No* | Docker Compose project name (namespaces containers, volumes, networks). Change for each parallel instance. Default: `cc-docker`. |
 | `PORT_BASE` | No | Port prefix for host bindings. Default: `41` → 41xxx ports. Use `42` for second instance, `43` for third, etc. |
 | `VOLUME_CHECK_MODE` | No | Volume check mode: `interactive` (prompt), `auto-fresh` (create new), `auto-adopt` (copy from source), `skip` (no checks). Default: `interactive`. |
-| `VOLUME_ADOPT_FROM` | No | Source project for auto-adopt mode. Example: `docker-claude`. Only used when `VOLUME_CHECK_MODE=auto-adopt`. |
+| `VOLUME_ADOPT_FROM` | No | Source project for auto-adopt mode. Example: `cc-docker`. Only used when `VOLUME_CHECK_MODE=auto-adopt`. |
 | `ANTHROPIC_API_KEY` | No* | API key for headless auth. Leave empty and use `make login` for OAuth. |
 | `ANTHROPIC_BASE_URL` | No | Override the Anthropic API endpoint (e.g. for proxies or local LLM gateways). |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | No | Pin a specific Haiku model version. Leave empty for Claude Code defaults. |
@@ -206,8 +206,8 @@ claude
 | Encrypted backup | `make backup-enc` |
 | Enable Docker-in-Docker | `make DIND=true up` |
 | Enable debugger support | `make DEBUG=true up` |
-| Copy file into container | `docker cp ./file.txt $(docker ps -q -f name=docker-claude):/workspace/` |
-| Copy file out of container | `docker cp $(docker ps -q -f name=docker-claude):/workspace/file.txt ./` |
+| Copy file into container | `docker cp ./file.txt $(docker ps -q -f name=cc-docker):/workspace/` |
+| Copy file out of container | `docker cp $(docker ps -q -f name=cc-docker):/workspace/file.txt ./` |
 | View all commands | `make help` |
 | Install plugins | `make install-plugins` |
 | Sync plugins | `make sync-plugins` |
@@ -217,12 +217,12 @@ claude
 | Run Playwright tests | `make browser-test TEST=path/to/test` |
 | Take a screenshot | `make browser-screenshot URL=https://example.com` |
 | Check volume status | `make volume-status` |
-| Adopt orphan volumes | `make volume-adopt FROM=docker-claude` |
+| Adopt orphan volumes | `make volume-adopt FROM=cc-docker` |
 | iOS development (macOS) | `make host-bind-mobile-up` |
 
 ## Multi-Instance Setup
 
-You can run multiple isolated instances of docker-claude simultaneously. Each instance has its own:
+You can run multiple isolated instances of cc-docker simultaneously. Each instance has its own:
 - **Containers** — separate container names
 - **Volumes** — isolated code and auth storage
 - **Ports** — configurable port range to avoid conflicts
@@ -253,7 +253,7 @@ make up
 VOLUME_CHECK_MODE=auto-fresh make up
 
 # Auto-adopt — copy data from specific project
-VOLUME_ADOPT_FROM=docker-claude make up
+VOLUME_ADOPT_FROM=cc-docker make up
 
 # Skip checks — proceed without prompts
 VOLUME_CHECK_MODE=skip make up
@@ -271,7 +271,7 @@ VOLUME_CHECK_MODE=skip make up
 
 1. **Copy the project to a new location:**
    ```bash
-   cp -r /path/to/docker-claude /path/to/trial-claude
+   cp -r /path/to/cc-docker /path/to/trial-claude
    cd /path/to/trial-claude
    ```
 
@@ -293,19 +293,19 @@ VOLUME_CHECK_MODE=skip make up
 
 | Setting | First Instance | Second Instance |
 |---------|---------------|-----------------|
-| `COMPOSE_PROJECT_NAME` | `docker-claude` | `trial-claude` |
+| `COMPOSE_PROJECT_NAME` | `cc-docker` | `trial-claude` |
 | `PORT_BASE` | `41` | `42` |
-| Container name | `docker-claude-docker-claude-1` | `trial-claude-docker-claude-1` |
-| Project volume | `docker-claude_vol-projects` | `trial-claude_vol-projects` |
-| Auth volume | `docker-claude_vol-claude-auth` | `trial-claude_vol-claude-auth` |
+| Container name | `cc-docker-cc-docker-1` | `trial-claude-cc-docker-1` |
+| Project volume | `cc-docker_vol-projects` | `trial-claude_vol-projects` |
+| Home volume | `cc-docker_vol-home` | `trial-claude_vol-home` |
 | Ports | 41xxx (41300, 41517, etc.) | 42xxx (42300, 42517, etc.) |
 
 ### Example: Running Two Instances
 
 ```bash
 # Terminal 1 — Main instance
-cd ~/projects/docker-claude
-# .env: COMPOSE_PROJECT_NAME=docker-claude, PORT_BASE=41
+cd ~/projects/cc-docker
+# .env: COMPOSE_PROJECT_NAME=cc-docker, PORT_BASE=41
 make up
 make claude
 
@@ -333,11 +333,11 @@ Images are built once and tagged with the project name. To share the base image:
 
 ```bash
 # Build in first instance
-cd ~/projects/docker-claude
+cd ~/projects/cc-docker
 make build
 
 # Reuse image in second instance (tag it)
-docker tag docker-claude:latest trial-claude:latest
+docker tag cc-docker:latest trial-claude:latest
 
 # Start second instance (skip build)
 cd ~/projects/trial-claude
@@ -350,7 +350,7 @@ Backups are per-instance and include the project name:
 
 ```bash
 # Main instance backup
-docker-claude-backup_20260410_120000.tar.gz
+cc-docker-backup_20260410_120000.tar.gz
 
 # Trial instance backup
 trial-claude-backup_20260410_120000.tar.gz
@@ -383,7 +383,7 @@ make host-bind-mobile-up # Start with host bind + Mobile (iOS dev)
 make host-bind-solana-up # Start with host bind + Solana
 
 # Interactive
-make shell              # Open bash shell in docker-claude
+make shell              # Open bash shell in cc-docker
 make claude             # Launch Claude Code CLI
 make login              # Run Claude OAuth login
 make shell-solana       # Open shell in Solana container
@@ -392,7 +392,7 @@ make shell-mobile       # Open shell in Mobile container
 # Diagnostics
 make health             # Check all runtimes, auth, Docker socket
 make status             # Show containers, volumes, image sizes
-make logs               # Follow docker-claude logs
+make logs               # Follow cc-docker logs
 make logs-all           # Follow all service logs
 
 # Plugin Management
@@ -602,13 +602,13 @@ claude
 
 ```bash
 # Copy files into the container (use container name from 'docker ps')
-docker cp ./my-file.txt $(docker ps -q -f name=docker-claude):/workspace/
+docker cp ./my-file.txt $(docker ps -q -f name=cc-docker):/workspace/
 
 # Or specify the full container name
-docker cp ./my-file.txt docker-claude-docker-claude-1:/workspace/
+docker cp ./my-file.txt cc-docker-cc-docker-1:/workspace/
 
 # Copy files out
-docker cp docker-claude-docker-claude-1:/workspace/output.txt ./
+docker cp cc-docker-cc-docker-1:/workspace/output.txt ./
 
 # Or use git (recommended)
 make shell
@@ -729,7 +729,7 @@ docker compose build \
   --build-arg INCLUDE_DOTNET=false \
   --build-arg INCLUDE_GOLANG=true \
   --build-arg INCLUDE_RUST=false \
-  docker-claude
+  cc-docker
 ```
 
 ## VS Code Dev Container
@@ -815,7 +815,7 @@ The project volume (`{project}_vol-projects`) lives inside Docker's virtual file
 ```bash
 # Create a backup (saved to ./backups/)
 make backup
-# Output: ✓ Backup complete: backups/docker-claude-backup_20260330_143000.tar.gz (2.1G)
+# Output: ✓ Backup complete: backups/cc-docker-backup_20260330_143000.tar.gz (2.1G)
 
 # List all backups with sizes
 make backup-list
@@ -825,7 +825,7 @@ make backup-list
 
 ```bash
 # Restore from a specific backup (stops containers, asks for confirmation)
-make restore FILE=backups/docker-claude-backup_20260330_143000.tar.gz
+make restore FILE=backups/cc-docker-backup_20260330_143000.tar.gz
 # Then restart
 make up
 ```
@@ -846,7 +846,7 @@ To run backups automatically on your Mac:
 crontab -e
 
 # Add this line for daily backups at 2am
-0 2 * * * cd /path/to/docker-claude && make backup 2>&1 >> backups/cron.log
+0 2 * * * cd /path/to/cc-docker && make backup 2>&1 >> backups/cron.log
 ```
 
 > **Note:** Backups work even when containers are stopped — they spin up a temporary container to read the volume. The `backups/` directory is git-ignored by default.
@@ -860,7 +860,7 @@ For sensitive projects, use AES-256-CBC encrypted backups via openssl:
 make backup-enc
 
 # Restore from encrypted backup (prompts for passphrase)
-make restore-enc FILE=backups/docker-claude-backup_20260330_143000.tar.gz.enc
+make restore-enc FILE=backups/cc-docker-backup_20260330_143000.tar.gz.enc
 ```
 
 No GPG setup needed — just remember your passphrase. Losing it means the backup is unrecoverable.
@@ -871,7 +871,7 @@ No GPG setup needed — just remember your passphrase. Losing it means the backu
 crontab -e
 
 # Uses BACKUP_PASS env var to avoid interactive prompt
-0 2 * * * cd /path/to/docker-claude && BACKUP_PASS="your-passphrase" make backup-enc 2>&1 >> backups/cron.log
+0 2 * * * cd /path/to/cc-docker && BACKUP_PASS="your-passphrase" make backup-enc 2>&1 >> backups/cron.log
 ```
 
 ## Security
@@ -950,7 +950,7 @@ git config --global core.autocrlf input
 ## Project Structure
 
 ```
-docker-claude/
+cc-docker/
 ├── .devcontainer/
 │   └── devcontainer.json          # VS Code Dev Container config
 ├── .dockerignore                  # Build context exclusions

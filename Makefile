@@ -20,7 +20,7 @@
 
 # Project name for container/volume naming (from .env or default)
 # Use $(or ...) for default value in Make
-PROJECT_NAME := $(or $(COMPOSE_PROJECT_NAME),docker-claude)
+PROJECT_NAME := $(or $(COMPOSE_PROJECT_NAME),cc-docker)
 PORT_BASE_VAL := $(or $(PORT_BASE),41)
 
 # Export variables for shell commands in recipes
@@ -71,11 +71,14 @@ ifeq ($(DEBUG),true)
     COMPOSE_FILES += -f docker-compose.debug.yml
 endif
 
+# Detect docker compose (plugin) vs standalone docker-compose
+COMPOSE_CMD := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
+
 # Docker Compose command with project name
-COMPOSE := docker compose -p $(PROJECT_NAME) $(COMPOSE_FILES)
+COMPOSE := $(COMPOSE_CMD) $(COMPOSE_FILES)
 
 # Container name (Docker Compose format: project-service-1)
-CONTAINER := $(PROJECT_NAME)-docker-claude-1
+CONTAINER := $(PROJECT_NAME)-cc-docker-1
 
 # =============================================================================
 # Help
@@ -127,7 +130,7 @@ build: .env ## Build core image (all stacks)
 		--build-arg INCLUDE_RUST=true \
 		--build-arg INCLUDE_BROWSER=true \
 		--build-arg INCLUDE_GPU=$(GPU) \
-		docker-claude
+		cc-docker
 
 build-slim: .env ## Build slim image (Node + Go only)
 	$(COMPOSE) build \
@@ -137,14 +140,14 @@ build-slim: .env ## Build slim image (Node + Go only)
 		--build-arg INCLUDE_RUST=false \
 		--build-arg INCLUDE_BROWSER=false \
 		--build-arg INCLUDE_GPU=false \
-		docker-claude
+		cc-docker
 
 build-all: build ## Build all images including profiles
-	$(COMPOSE) --profile solana build docker-claude-solana
-	$(COMPOSE) --profile mobile build docker-claude-mobile
+	$(COMPOSE) --profile solana build cc-docker-solana
+	$(COMPOSE) --profile mobile build cc-docker-mobile
 
 build-no-cache: .env ## Build core image without cache
-	$(COMPOSE) build --no-cache docker-claude
+	$(COMPOSE) build --no-cache cc-docker
 
 # =============================================================================
 # Run
@@ -176,21 +179,21 @@ host-bind-up: .env ## Start with host workspace bind mount (core only)
 		echo "Creating workspace directory: ${HOST_WORKSPACE_PATH:-./workspace}"; \
 		mkdir -p "${HOST_WORKSPACE_PATH:-./workspace}"; \
 	fi
-	docker compose -p $(PROJECT_NAME) $(COMPOSE_FILES) -f docker-compose.host-bind.yml up -d
+	$(COMPOSE_CMD) $(COMPOSE_FILES) -f docker-compose.host-bind.yml up -d
 
 host-bind-mobile-up: .env ## Start with host bind + Mobile profile (for iOS dev)
 	@if [ ! -d "${HOST_WORKSPACE_PATH:-./workspace}" ]; then \
 		echo "Creating workspace directory: ${HOST_WORKSPACE_PATH:-./workspace}"; \
 		mkdir -p "${HOST_WORKSPACE_PATH:-./workspace}"; \
 	fi
-	docker compose -p $(PROJECT_NAME) $(COMPOSE_FILES) -f docker-compose.host-bind.yml --profile mobile up -d
+	$(COMPOSE_CMD) $(COMPOSE_FILES) -f docker-compose.host-bind.yml --profile mobile up -d
 
 host-bind-solana-up: .env ## Start with host bind + Solana profile
 	@if [ ! -d "${HOST_WORKSPACE_PATH:-./workspace}" ]; then \
 		echo "Creating workspace directory: ${HOST_WORKSPACE_PATH:-./workspace}"; \
 		mkdir -p "${HOST_WORKSPACE_PATH:-./workspace}"; \
 	fi
-	docker compose -p $(PROJECT_NAME) $(COMPOSE_FILES) -f docker-compose.host-bind.yml --profile solana up -d
+	$(COMPOSE_CMD) $(COMPOSE_FILES) -f docker-compose.host-bind.yml --profile solana up -d
 
 all-up: .env ## Start everything
 	$(COMPOSE) --profile solana --profile mobile up -d
@@ -199,23 +202,23 @@ all-up: .env ## Start everything
 # Interactive
 # =============================================================================
 
-shell: .env ## Open bash shell in docker-claude
-	$(COMPOSE) exec -u dev docker-claude bash
+shell: .env ## Open bash shell in cc-docker
+	$(COMPOSE) exec -u dev cc-docker bash
 
 claude: .env ## Launch Claude Code CLI
-	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && claude'
+	$(COMPOSE) exec cc-docker bash -c '. /usr/local/nvm/nvm.sh && claude'
 
 login: .env ## Run Claude OAuth login
-	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && claude login'
+	$(COMPOSE) exec cc-docker bash -c '. /usr/local/nvm/nvm.sh && claude login'
 
 install-plugins: .env ## Register marketplace and sync plugin content
-	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && claude plugin marketplace add /etc/claude-code/marketplace 2>/dev/null; claude plugin sync 2>/dev/null || /entrypoint.sh --sync-plugins; claude plugin list'
+	$(COMPOSE) exec cc-docker bash -c '. /usr/local/nvm/nvm.sh && claude plugin marketplace add /etc/claude-code/marketplace 2>/dev/null; claude plugin sync 2>/dev/null || /entrypoint.sh --sync-plugins; claude plugin list'
 
 sync-plugins: .env ## Manually trigger plugin content sync from marketplace
-	$(COMPOSE) exec docker-claude bash -c 'source /entrypoint.sh; sync_plugin_content'
+	$(COMPOSE) exec cc-docker bash -c 'source /entrypoint.sh; sync_plugin_content'
 
 reset-plugins: .env ## Clear stale plugin state for re-sync on next start
-	$(COMPOSE) exec docker-claude bash -c 'rm -rf ~/.claude/plugins/agentic-* ~/.claude/plugins/superpowers 2>/dev/null; echo "Plugin state cleared. Restart to re-sync: make down && make up"'
+	$(COMPOSE) exec cc-docker bash -c 'rm -rf ~/.claude/plugins/agentic-* ~/.claude/plugins/superpowers 2>/dev/null; echo "Plugin state cleared. Restart to re-sync: make down && make up"'
 
 # =============================================================================
 # Browser (noVNC + Playwright)
@@ -228,39 +231,39 @@ browser: .env ## Open noVNC visual browser in host browser
 		echo "Open manually: http://localhost:${PORT_BASE:-41}608/vnc.html"
 
 browser-start: .env ## Start noVNC visual browser inside container
-	$(COMPOSE) exec -d docker-claude bash -c 'novnc-startup 2>&1 | tee /tmp/novnc.log'
+	$(COMPOSE) exec -d cc-docker bash -c 'novnc-startup 2>&1 | tee /tmp/novnc.log'
 
 browser-stop: .env ## Stop visual browser processes
-	$(COMPOSE) exec docker-claude novnc-startup stop
+	$(COMPOSE) exec cc-docker novnc-startup stop
 
 browser-test: .env ## Run Playwright tests (usage: make browser-test TEST=path/to/test)
-	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && npx playwright test $(TEST)'
+	$(COMPOSE) exec cc-docker bash -c '. /usr/local/nvm/nvm.sh && npx playwright test $(TEST)'
 
 browser-screenshot: .env ## Take a Playwright screenshot (usage: make browser-screenshot URL=https://example.com)
-	$(COMPOSE) exec docker-claude bash -c '. /usr/local/nvm/nvm.sh && npx playwright screenshot --browser=chromium $(URL) /tmp/screenshot.png && echo "Screenshot saved to /tmp/screenshot.png"'
+	$(COMPOSE) exec cc-docker bash -c '. /usr/local/nvm/nvm.sh && npx playwright screenshot --browser=chromium $(URL) /tmp/screenshot.png && echo "Screenshot saved to /tmp/screenshot.png"'
 
 shell-solana: .env ## Open shell in Solana container
-	$(COMPOSE) --profile solana exec -u dev docker-claude-solana bash
+	$(COMPOSE) --profile solana exec -u dev cc-docker-solana bash
 
 shell-mobile: .env ## Open shell in Mobile container
-	$(COMPOSE) --profile mobile exec -u dev docker-claude-mobile bash
+	$(COMPOSE) --profile mobile exec -u dev cc-docker-mobile bash
 
 # =============================================================================
 # Status & Logs
 # =============================================================================
 
 status: .env ## Show running containers and volumes
-	@echo "=== Containers (${COMPOSE_PROJECT_NAME:-docker-claude}) ==="
-	@docker ps --filter "name=${COMPOSE_PROJECT_NAME:-docker-claude}" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+	@echo "=== Containers (${COMPOSE_PROJECT_NAME:-cc-docker}) ==="
+	@docker ps --filter "name=${COMPOSE_PROJECT_NAME:-cc-docker}" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 	@echo ""
 	@echo "=== Volumes ==="
-	@docker volume ls --filter "name=${COMPOSE_PROJECT_NAME:-docker-claude}"
+	@docker volume ls --filter "name=${COMPOSE_PROJECT_NAME:-cc-docker}"
 	@echo ""
 	@echo "=== Image Sizes ==="
-	@docker images --filter "reference=${COMPOSE_PROJECT_NAME:-docker-claude}*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+	@docker images --filter "reference=${COMPOSE_PROJECT_NAME:-cc-docker}*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
-logs: .env ## Follow logs for docker-claude
-	$(COMPOSE) logs -f docker-claude
+logs: .env ## Follow logs for cc-docker
+	$(COMPOSE) logs -f cc-docker
 
 logs-all: .env ## Follow logs for all services
 	$(COMPOSE) --profile solana --profile mobile logs -f
@@ -270,8 +273,8 @@ logs-all: .env ## Follow logs for all services
 # =============================================================================
 
 health: .env ## Run health check on all installed runtimes
-	$(COMPOSE) exec docker-claude bash /workspace/.health-check.sh 2>/dev/null || \
-	$(COMPOSE) exec docker-claude bash -c '\
+	$(COMPOSE) exec cc-docker bash /workspace/.health-check.sh 2>/dev/null || \
+	$(COMPOSE) exec cc-docker bash -c '\
 		echo "=== Runtime Health Check ===" && \
 		echo "" && \
 		. /usr/local/nvm/nvm.sh 2>/dev/null && \
@@ -312,7 +315,7 @@ clean: .env ## Stop containers and remove images (volumes persist)
 	$(COMPOSE) --profile solana --profile mobile down --rmi local
 
 nuke: .env ## ⚠️  Remove EVERYTHING (containers, volumes, images)
-	@echo "⚠️  This will delete ALL containers, volumes, and images for project: ${COMPOSE_PROJECT_NAME:-docker-claude}"
+	@echo "⚠️  This will delete ALL containers, volumes, and images for project: ${COMPOSE_PROJECT_NAME:-cc-docker}"
 	@echo "   Your project code in the volume will be PERMANENTLY LOST."
 	@read -p "   Type 'yes' to confirm: " confirm && \
 	if [ "$$confirm" = "yes" ]; then \
@@ -325,37 +328,37 @@ nuke: .env ## ⚠️  Remove EVERYTHING (containers, volumes, images)
 # =============================================================================
 # Backup & Restore
 # =============================================================================
-# Volume names are prefixed by COMPOSE_PROJECT_NAME (e.g., docker-claude_vol-projects)
+# Volume names are prefixed by COMPOSE_PROJECT_NAME (e.g., cc-docker_vol-projects)
 
 BACKUP_DIR ?= ./backups
 
 backup: .env ## Backup project volume to a timestamped tar.gz
 	@mkdir -p $(BACKUP_DIR)
 	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S) && \
-	VOLUME_NAME="${COMPOSE_PROJECT_NAME:-docker-claude}_vol-projects" && \
-	BACKUP_FILE="$(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_$${TIMESTAMP}.tar.gz" && \
+	VOLUME_NAME="${COMPOSE_PROJECT_NAME:-cc-docker}_vol-projects" && \
+	BACKUP_FILE="$(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_$${TIMESTAMP}.tar.gz" && \
 	echo "Backing up volume $$VOLUME_NAME → $${BACKUP_FILE} ..." && \
 	docker run --rm \
 		-v $$VOLUME_NAME:/workspace:ro \
 		-v $$(cd $(BACKUP_DIR) && pwd):/backup \
 		ubuntu:24.04 \
-		tar czf /backup/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_$${TIMESTAMP}.tar.gz -C /workspace . && \
+		tar czf /backup/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_$${TIMESTAMP}.tar.gz -C /workspace . && \
 	SIZE=$$(du -h "$${BACKUP_FILE}" | cut -f1) && \
 	echo "✓ Backup complete: $${BACKUP_FILE} ($${SIZE})"
 
 restore: .env ## Restore project volume from a backup (usage: make restore FILE=backups/xxx.tar.gz)
 	@if [ -z "$(FILE)" ]; then \
-		echo "Usage: make restore FILE=backups/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_YYYYMMDD_HHMMSS.tar.gz"; \
+		echo "Usage: make restore FILE=backups/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_YYYYMMDD_HHMMSS.tar.gz"; \
 		echo ""; \
 		echo "Available backups:"; \
-		ls -lh $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_*.tar.gz 2>/dev/null || echo "  No backups found in $(BACKUP_DIR)/"; \
+		ls -lh $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_*.tar.gz 2>/dev/null || echo "  No backups found in $(BACKUP_DIR)/"; \
 		exit 1; \
 	fi
 	@if [ ! -f "$(FILE)" ]; then \
 		echo "✗ File not found: $(FILE)"; \
 		exit 1; \
 	fi
-	@VOLUME_NAME="${COMPOSE_PROJECT_NAME:-docker-claude}_vol-projects" && \
+	@VOLUME_NAME="${COMPOSE_PROJECT_NAME:-cc-docker}_vol-projects" && \
 	echo "⚠️  This will REPLACE all contents of volume $$VOLUME_NAME with the backup." && \
 	echo "   Backup file: $(FILE)" && \
 	@read -p "   Type 'yes' to confirm: " confirm && \
@@ -374,18 +377,18 @@ restore: .env ## Restore project volume from a backup (usage: make restore FILE=
 	fi
 
 backup-list: .env ## List all available backups for current project
-	@echo "=== Backups in $(BACKUP_DIR)/ for ${COMPOSE_PROJECT_NAME:-docker-claude} ==="
-	@ls -lh $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_*.tar.gz $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_*.tar.gz.enc 2>/dev/null \
+	@echo "=== Backups in $(BACKUP_DIR)/ for ${COMPOSE_PROJECT_NAME:-cc-docker} ==="
+	@ls -lh $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_*.tar.gz $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_*.tar.gz.enc 2>/dev/null \
 		| awk '{printf "  %s  %s  %s\n", $$9, $$5, $$6" "$$7" "$$8}' \
 		|| echo "  No backups found for this project."
 	@echo ""
-	@TOTAL=$$(ls $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_*.tar.gz $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_*.tar.gz.enc 2>/dev/null | wc -l | tr -d ' ') && \
-	echo "Total: $${TOTAL} backup(s) for ${COMPOSE_PROJECT_NAME:-docker-claude}"
+	@TOTAL=$$(ls $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_*.tar.gz $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_*.tar.gz.enc 2>/dev/null | wc -l | tr -d ' ') && \
+	echo "Total: $${TOTAL} backup(s) for ${COMPOSE_PROJECT_NAME:-cc-docker}"
 	@du -sh $(BACKUP_DIR) 2>/dev/null | awk '{printf "  Disk usage: %s\n", $$1}' || true
 
 backup-clean: .env ## Delete backups older than 30 days for current project
-	@echo "Removing backups older than 30 days from $(BACKUP_DIR)/ for ${COMPOSE_PROJECT_NAME:-docker-claude} ..."
-	@find $(BACKUP_DIR) -name "${COMPOSE_PROJECT_NAME:-docker-claude}-backup_*" -mtime +30 -print -delete 2>/dev/null \
+	@echo "Removing backups older than 30 days from $(BACKUP_DIR)/ for ${COMPOSE_PROJECT_NAME:-cc-docker} ..."
+	@find $(BACKUP_DIR) -name "${COMPOSE_PROJECT_NAME:-cc-docker}-backup_*" -mtime +30 -print -delete 2>/dev/null \
 		|| echo "  No old backups found."
 	@echo "Done."
 
@@ -396,8 +399,8 @@ backup-clean: .env ## Delete backups older than 30 days for current project
 backup-enc: .env ## Encrypted backup (openssl AES-256, prompts for passphrase)
 	@mkdir -p $(BACKUP_DIR)
 	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S) && \
-	VOLUME_NAME="${COMPOSE_PROJECT_NAME:-docker-claude}_vol-projects" && \
-	BACKUP_FILE="$(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_$${TIMESTAMP}.tar.gz.enc" && \
+	VOLUME_NAME="${COMPOSE_PROJECT_NAME:-cc-docker}_vol-projects" && \
+	BACKUP_FILE="$(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_$${TIMESTAMP}.tar.gz.enc" && \
 	echo "Creating encrypted backup of volume $$VOLUME_NAME → $${BACKUP_FILE} ..." && \
 	echo "You will be prompted for an encryption passphrase." && \
 	docker run --rm \
@@ -411,17 +414,17 @@ backup-enc: .env ## Encrypted backup (openssl AES-256, prompts for passphrase)
 
 restore-enc: .env ## Restore from encrypted backup (usage: make restore-enc FILE=backups/xxx.tar.gz.enc)
 	@if [ -z "$(FILE)" ]; then \
-		echo "Usage: make restore-enc FILE=backups/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_YYYYMMDD_HHMMSS.tar.gz.enc"; \
+		echo "Usage: make restore-enc FILE=backups/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_YYYYMMDD_HHMMSS.tar.gz.enc"; \
 		echo ""; \
 		echo "Available encrypted backups:"; \
-		ls -lh $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-docker-claude}-backup_*.tar.gz.enc 2>/dev/null || echo "  No encrypted backups found in $(BACKUP_DIR)/"; \
+		ls -lh $(BACKUP_DIR)/${COMPOSE_PROJECT_NAME:-cc-docker}-backup_*.tar.gz.enc 2>/dev/null || echo "  No encrypted backups found in $(BACKUP_DIR)/"; \
 		exit 1; \
 	fi
 	@if [ ! -f "$(FILE)" ]; then \
 		echo "✗ File not found: $(FILE)"; \
 		exit 1; \
 	fi
-	@VOLUME_NAME="${COMPOSE_PROJECT_NAME:-docker-claude}_vol-projects" && \
+	@VOLUME_NAME="${COMPOSE_PROJECT_NAME:-cc-docker}_vol-projects" && \
 	echo "⚠️  This will REPLACE all contents of volume $$VOLUME_NAME with the backup." && \
 	echo "   Backup file: $(FILE)" && \
 	@read -p "   Type 'yes' to confirm: " confirm && \
@@ -455,7 +458,7 @@ volume-adopt: .env ## Adopt orphan volumes (usage: make volume-adopt FROM=projec
 		echo "Usage: make volume-adopt FROM=<project-name>"; \
 		echo ""; \
 		echo "Examples:"; \
-		echo "  make volume-adopt FROM=docker-claude"; \
+		echo "  make volume-adopt FROM=cc-docker"; \
 		echo "  make volume-adopt FROM=trial-claude"; \
 		echo ""; \
 		echo "Run 'make volume-status' to see available orphan volumes."; \

@@ -9,10 +9,10 @@
 # =============================================================================
 
 services:
-  docker-claude:
+  cc-docker:
     volumes:
       - vol-projects:/workspace
-      - vol-claude-auth:/home/dev/.claude
+      - vol-home:/home/dev
       # SECURITY: Docker socket NOT mounted by default
       # Windows: SSH keys mounted directly (no agent forwarding)
       - ${USERPROFILE:-.}/.ssh:/home/dev/.ssh:ro
@@ -24,14 +24,14 @@ services:
       # No SSH_AUTH_SOCK on Windows — keys are mounted directly
       - SSH_AUTH_SOCK=
 
-  docker-claude-solana:
+  cc-docker-solana:
     volumes:
       - vol-projects:/workspace
-      - vol-claude-auth:/home/dev/.claude
+      - vol-home:/home/dev
       - ${USERPROFILE:-.}/.ssh:/home/dev/.ssh:ro
 
-  docker-claude-mobile:
+  cc-docker-mobile:
     volumes:
       - vol-projects:/workspace
-      - vol-claude-auth:/home/dev/.claude
+      - vol-home:/home/dev
       - ${USERPROFILE:-.}/.ssh:/home/dev/.ssh:ro

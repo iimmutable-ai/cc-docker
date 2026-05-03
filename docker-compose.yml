@@ -23,7 +23,7 @@ services:
   # ===========================================================================
   # Core Development Environment (always available)
   # ===========================================================================
-  docker-claude:
+  cc-docker:
     build:
       context: .
       dockerfile: Dockerfile
@@ -37,9 +37,9 @@ services:
         DEV_UID: "1000"
         DEV_GID: "1000"
         DEV_USER: "${DEV_USER:-dev}"
-    image: ${COMPOSE_PROJECT_NAME:-docker-claude}:latest
+    image: ${COMPOSE_PROJECT_NAME:-cc-docker}:latest
     # container_name and hostname removed - Docker Compose auto-generates from project name
-    # Result: ${COMPOSE_PROJECT_NAME}-docker-claude-1
+    # Result: ${COMPOSE_PROJECT_NAME}-cc-docker-1
     stdin_open: true
     tty: true
     restart: unless-stopped
@@ -48,7 +48,6 @@ services:
     environment:
       - HOME=/home/${DEV_USER:-dev}  # Override host HOME that Docker passes through
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
       - ANTHROPIC_DEFAULT_HAIKU_MODEL=${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}
       - ANTHROPIC_DEFAULT_SONNET_MODEL=${ANTHROPIC_DEFAULT_SONNET_MODEL:-}
       - ANTHROPIC_DEFAULT_OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL:-}
@@ -71,8 +70,8 @@ services:
     volumes:
       # Project code + dependencies (named volume, fully virtualized)
       - vol-projects:/workspace
-      # Claude auth persistence
-      - vol-claude-auth:/home/${DEV_USER:-dev}/.claude
+      # User home persistence (auth, config, Go workspace, SSH)
+      - vol-home:/home/${DEV_USER:-dev}
       # SECURITY: Docker socket NOT mounted by default
       # To enable DinD, use: docker compose -f docker-compose.yml -f docker-compose.dind.yml up -d
       # Claude Code user settings (global defaults — symlinked by entrypoint)
@@ -118,13 +117,13 @@ services:
   # ===========================================================================
   # Solana Development (optional profile)
   # ===========================================================================
-  docker-claude-solana:
+  cc-docker-solana:
     build:
       context: .
       dockerfile: Dockerfile.solana
       args:
-        BASE_IMAGE: docker-claude:latest
-    image: ${COMPOSE_PROJECT_NAME:-docker-claude}-solana:latest
+        BASE_IMAGE: cc-docker:latest
+    image: ${COMPOSE_PROJECT_NAME:-cc-docker}-solana:latest
     # container_name and hostname removed - Docker Compose auto-generates from project name
     profiles:
       - solana
@@ -134,7 +133,6 @@ services:
 
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
       - ANTHROPIC_DEFAULT_HAIKU_MODEL=${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}
       - ANTHROPIC_DEFAULT_SONNET_MODEL=${ANTHROPIC_DEFAULT_SONNET_MODEL:-}
       - ANTHROPIC_DEFAULT_OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL:-}
@@ -143,7 +141,7 @@ services:
 
     volumes:
       - vol-projects:/workspace
-      - vol-claude-auth:/home/${DEV_USER:-dev}/.claude
+      - vol-home:/home/${DEV_USER:-dev}
       # SECURITY: Docker socket NOT mounted by default
       - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
 
@@ -160,13 +158,13 @@ services:
   # ===========================================================================
   # Mobile Development (optional profile)
   # ===========================================================================
-  docker-claude-mobile:
+  cc-docker-mobile:
     build:
       context: .
       dockerfile: Dockerfile.mobile
       args:
-        BASE_IMAGE: docker-claude:latest
-    image: ${COMPOSE_PROJECT_NAME:-docker-claude}-mobile:latest
+        BASE_IMAGE: cc-docker:latest
+    image: ${COMPOSE_PROJECT_NAME:-cc-docker}-mobile:latest
     # container_name and hostname removed - Docker Compose auto-generates from project name
     profiles:
       - mobile
@@ -176,7 +174,6 @@ services:
 
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
       - ANTHROPIC_DEFAULT_HAIKU_MODEL=${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}
       - ANTHROPIC_DEFAULT_SONNET_MODEL=${ANTHROPIC_DEFAULT_SONNET_MODEL:-}
       - ANTHROPIC_DEFAULT_OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL:-}
@@ -189,7 +186,7 @@ services:
 
     volumes:
       - vol-projects:/workspace
-      - vol-claude-auth:/home/${DEV_USER:-dev}/.claude
+      - vol-home:/home/${DEV_USER:-dev}
       # SECURITY: Docker socket NOT mounted by default
       - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
 
@@ -215,6 +212,6 @@ volumes:
     # name directive removed - Docker Compose prefixes with project name
     driver: local
 
-  vol-claude-auth:
+  vol-home:
     # name directive removed - Docker Compose prefixes with project name
     driver: local

@@ -275,6 +275,12 @@ ENV PATH=/usr/local/cargo/bin:/usr/local/go/bin:/home/${DEV_USER}/go/bin:/usr/lo
 # =============================================================================
 COPY config/.bashrc /home/${DEV_USER}/.bashrc
 COPY config/starship.toml /home/${DEV_USER}/.config/starship.toml
+
+# Skeleton for home volume initialization on first start
+RUN mkdir -p /etc/skel-dev/.config /etc/skel-dev/.ssh /etc/skel-dev/go
+COPY config/.bashrc /etc/skel-dev/.bashrc
+COPY config/starship.toml /etc/skel-dev/.config/starship.toml
+
 COPY config/.gitattributes /workspace/.gitattributes
 COPY config/novnc-startup.sh /usr/local/bin/novnc-startup
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh

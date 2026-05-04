@@ -12,6 +12,8 @@
 
 services:
   cc-docker:
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - vol-projects:/workspace
       - vol-home:/home/dev
@@ -20,6 +22,8 @@ services:
       - ${HOME:-~}/.gitconfig:/home/dev/.gitconfig:ro
 
   cc-docker-solana:
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - vol-projects:/workspace
       - vol-home:/home/dev
@@ -27,6 +31,8 @@ services:
       - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
 
   cc-docker-mobile:
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - vol-projects:/workspace
       - vol-home:/home/dev

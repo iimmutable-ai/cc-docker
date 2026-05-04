@@ -162,6 +162,11 @@ else
     echo -e "    To enable DinD: ${BLUE}make DIND=true up${NC}"
 fi
 
+# -- Docker socket permissions fallback --
+if [ -S "/var/run/docker.sock" ] && [ ! -w "/var/run/docker.sock" ]; then
+    sudo chmod 666 /var/run/docker.sock 2>/dev/null
+fi
+
 # -- Claude Code Auth --
 if [ -n "$ANTHROPIC_API_KEY" ]; then
     echo -e "${GREEN}✓${NC} Claude Code: API key configured"

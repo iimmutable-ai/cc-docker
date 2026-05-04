@@ -30,6 +30,10 @@ export PORT_BASE
 export PROJECT_NAME
 export PORT_BASE_VAL
 
+# Auto-detect host Docker socket GID for DinD permissions
+DOCKER_GID := $(shell stat -f '%g' /var/run/docker.sock 2>/dev/null || stat -c '%g' /var/run/docker.sock 2>/dev/null)
+export DOCKER_GID
+
 # Ensure .env exists before running most commands
 .env:
 	@if [ ! -f .env ]; then \

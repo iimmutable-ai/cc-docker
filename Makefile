@@ -159,6 +159,7 @@ build-no-cache: .env ## Build core image without cache
 # =============================================================================
 
 up: .env volume-check ## Start core environment (with volume check)
+	@mkdir -p shared
 	$(COMPOSE) up -d
 	@./scripts/volume-check.sh --create-manifest
 
@@ -168,9 +169,11 @@ down: ## Stop all services (volumes persist)
 restart: down up ## Restart all services
 
 solana-up: .env ## Start with Solana profile
+	@mkdir -p shared
 	$(COMPOSE) --profile solana up -d
 
 mobile-up: .env ## Start with Mobile profile
+	@mkdir -p shared
 	$(COMPOSE) --profile mobile up -d
 
 # =============================================================================

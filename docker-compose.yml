@@ -72,6 +72,8 @@ services:
       - vol-projects:/workspace
       # User home persistence (auth, config, Go workspace, SSH)
       - vol-home:/home/${DEV_USER:-dev}
+      # Shared folder for host-container file sharing (drag files here from host)
+      - ./shared:/shared:cached
       # SECURITY: Docker socket NOT mounted by default
       # To enable DinD, use: docker compose -f docker-compose.yml -f docker-compose.dind.yml up -d
       # Claude Code user settings (global defaults — symlinked by entrypoint)
@@ -142,6 +144,8 @@ services:
     volumes:
       - vol-projects:/workspace
       - vol-home:/home/${DEV_USER:-dev}
+      # Shared folder for host-container file sharing
+      - ./shared:/shared:cached
       # SECURITY: Docker socket NOT mounted by default
       - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
 
@@ -187,6 +191,8 @@ services:
     volumes:
       - vol-projects:/workspace
       - vol-home:/home/${DEV_USER:-dev}
+      # Shared folder for host-container file sharing
+      - ./shared:/shared:cached
       # SECURITY: Docker socket NOT mounted by default
       - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
 

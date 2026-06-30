@@ -1,6 +1,6 @@
 # Commands Reference
 
-This document is auto-generated from `Makefile`. Last updated: 2026-05-13
+This document is auto-generated from `Makefile`. Last updated: 2026-06-30
 
 <!-- AUTO-GENERATED START -->
 
@@ -43,6 +43,7 @@ This document is auto-generated from `Makefile`. Last updated: 2026-05-13
 | `make shell` | Open bash shell in cc-docker |
 | `make claude` | Launch Claude Code CLI |
 | `make login` | Run Claude OAuth login |
+| `make claude-reset` | Reset Claude Code to baked version (removes runtime install) |
 | `make gh-auth` | Run 'gh auth login' interactively inside container |
 | `make gh-status` | Show GitHub CLI auth status |
 | `make shell-solana` | Open shell in Solana container |

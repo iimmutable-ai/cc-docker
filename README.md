@@ -35,7 +35,7 @@ cp .env.example .env && make build && make up && make claude
 
 | | | |
 |---|---|---|
-| AI-Ready | Claude Code pre-installed with OAuth + API key auth | Browser Built-In | Playwright + Chromium + noVNC visual browser |
+| AI-Ready | Claude Code (native installer) with OAuth + API key auth | Browser Built-In | Playwright + Chromium + noVNC visual browser |
 | Multi-Runtime | Node.js, .NET, Go, Rust in one image | Profiles | Solana, Mobile (Android/Flutter/RN) extensions |
 | Cross-Platform | Mac, Windows (WSL2), Linux — identical experience | Multi-Instance | Run multiple isolated instances simultaneously |
 | Security-First | Docker socket off by default, ports bound to localhost | Terminal Tools | Yazi, Lazygit, Starship prompt, GitHub CLI included |
@@ -220,7 +220,7 @@ Rust:     rustc 1.x.x
 Docker:   Docker version 2x.x.x
 Git:      git version 2.x.x
 GitHub:   gh version 2.67.0
-Claude:   2.1.77 (Claude Code)
+Claude:   2.1.116 (Claude Code)
 
 === Auth Status ===
 API Key: configured            # or: Auth: NOT CONFIGURED
@@ -276,6 +276,7 @@ claude
 | Open a shell | `make shell` |
 | Launch Claude Code | `make claude` |
 | OAuth login | `make login` |
+| Reset Claude Code to baked version | `make claude-reset` |
 | GitHub CLI login | `make gh-auth` |
 | GitHub CLI status | `make gh-status` |
 | Check runtime health | `make health` |
@@ -463,6 +464,7 @@ make host-bind-solana-up # Start with host bind + Solana
 make shell              # Open bash shell in cc-docker
 make claude             # Launch Claude Code CLI
 make login              # Run Claude OAuth login
+make claude-reset       # Reset Claude Code to baked version (removes runtime override)
 make gh-auth            # Run GitHub CLI auth login
 make gh-status          # Show GitHub CLI auth status
 make shell-solana       # Open shell in Solana container

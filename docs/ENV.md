@@ -1,6 +1,6 @@
 # Environment Variables
 
-This document is auto-generated from `.env.example`. Last updated: 2026-05-13
+This document is auto-generated from `.env.example`. Last updated: 2026-06-30
 
 <!-- AUTO-GENERATED START -->
 
@@ -29,6 +29,12 @@ This document is auto-generated from `.env.example`. Last updated: 2026-05-13
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | No | Override default Haiku model | (model) |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | No | Override default Sonnet model | (model) |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | No | Override default Opus model | (model) |
+
+## Claude Code CLI Version
+
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `CLAUDE_CODE_VERSION` | No | Claude Code version baked into image (stable / latest / `<ver>`). Default: `2.1.116` — pinned for compatibility with 3rd-party LLM providers. | `2.1.116` |
 
 ## iOS Development (Host Bind Mount)
 

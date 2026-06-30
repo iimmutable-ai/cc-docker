@@ -172,13 +172,17 @@ RUN if [ "${INCLUDE_RUST}" = "true" ]; then \
     fi
 
 # =============================================================================
-# Claude Code CLI
+# Claude Code CLI (npm bootstrap — replaced by native install below)
 # =============================================================================
-ARG CLAUDE_CODE_VERSION=2.1.77
+# We temporarily install via npm to access `claude install`, then uninstall.
+# The native install happens after the dev user is created (see below).
+# Pinned to 2.1.116: newer versions break compatibility with 3rd-party LLM providers
+# (e.g. custom Anthropic-compatible gateways). 2.1.116 is the most reliable release.
+ARG CLAUDE_CODE_VERSION=2.1.116
 RUN if [ -s "$NVM_DIR/nvm.sh" ]; then \
       . $NVM_DIR/nvm.sh \
-      && npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
-      && echo ">>> Claude Code CLI v${CLAUDE_CODE_VERSION} installed"; \
+      && npm install -g @anthropic-ai/claude-code@2.1.77 \
+      && echo ">>> Claude Code npm bootstrap v2.1.77 installed"; \
     else \
       echo ">>> Claude Code CLI requires Node.js — skipped"; \
     fi
@@ -272,6 +276,36 @@ RUN existing_user=$(getent passwd ${DEV_UID} | cut -d: -f1) \
     && (groupadd -f docker 2>/dev/null; usermod -aG docker ${DEV_USER} 2>/dev/null; true) \
     && mkdir -p /workspace /home/${DEV_USER}/.claude /home/${DEV_USER}/.ssh /home/${DEV_USER}/go \
     && chown -R ${DEV_USER}:${DEV_USER} /workspace /home/${DEV_USER}
+
+# =============================================================================
+# Claude Code native install (replaces npm bootstrap, supply-chain hardened)
+# =============================================================================
+# Uses the npm-installed `claude` from above to lay down the signed native
+# binary, then moves it to /opt/claude/bin/claude (on the image's writable
+# layer, NOT under /home/dev which gets shadowed by vol-home on first boot).
+# The entrypoint symlinks ~/.local/bin/claude → /opt/claude/bin/claude if no
+# runtime install exists. `claude install <ver>` at runtime overrides by
+# writing to ~/.local/share/claude/versions/ and replacing the symlink.
+#
+# CLAUDE_CODE_VERSION accepts: stable | latest | <specific version> (e.g. 2.1.181)
+RUN if [ -s "$NVM_DIR/nvm.sh" ]; then \
+      . $NVM_DIR/nvm.sh \
+      && if command -v claude >/dev/null 2>&1; then \
+           mkdir -p /home/${DEV_USER}/.local/bin /home/${DEV_USER}/.local/share \
+           && chown -R ${DEV_USER}:${DEV_USER} /home/${DEV_USER}/.local \
+           && su ${DEV_USER} -c '. $NVM_DIR/nvm.sh && claude install "${CLAUDE_CODE_VERSION}"' \
+           && npm uninstall -g @anthropic-ai/claude-code \
+           && mkdir -p /opt/claude/bin \
+           && cp /home/${DEV_USER}/.local/share/claude/versions/* /opt/claude/bin/claude \
+           && chmod 755 /opt/claude/bin/claude \
+           && rm -rf /home/${DEV_USER}/.local/share/claude /home/${DEV_USER}/.local/bin/claude \
+           && echo ">>> Claude Code native ${CLAUDE_CODE_VERSION} baked to /opt/claude/bin/claude"; \
+         else \
+           echo ">>> Claude Code native install skipped (claude bootstrap missing)"; \
+         fi; \
+    else \
+      echo ">>> Claude Code native install skipped (nvm missing)"; \
+    fi
 
 # =============================================================================
 # Configure passwordless sudo for permission fixes

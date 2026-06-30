@@ -174,6 +174,7 @@ CLAUDE_MARKETPLACE_PATH=/path/to/your/marketplace
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | No | Pin a specific Haiku model version. Leave empty for Claude Code defaults. |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | No | Pin a specific Sonnet model version. Leave empty for Claude Code defaults. |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | No | Pin a specific Opus model version. Leave empty for Claude Code defaults. |
+| `CLAUDE_CODE_VERSION` | No | Claude Code version target baked into the image (`2.1.116`, `stable`, `latest`, or other specific version). Requires rebuild to change. **Default: `2.1.116`** — pinned for compatibility with 3rd-party LLM providers; newer versions break custom Anthropic-compatible gateways. See [Updating Claude Code](#updating-claude-code). |
 | `DEV_USER` | No | Username inside the container (default: `dev`). Set to match your host username or any custom name. Requires rebuild. |
 | `SSH_AUTH_SOCK` | No | SSH agent socket path (Mac/Linux). Run `echo $SSH_AUTH_SOCK` to get value. |
 | `HOME` | No | Host home directory for mounting `.gitconfig` (Mac/Linux). Run `echo $HOME`. |
@@ -641,6 +642,49 @@ claude plugin marketplace add /etc/claude-code/marketplace
 The marketplace is mounted read-only at `/etc/claude-code/marketplace`. File changes on your host are reflected immediately inside the container — no restart needed for updated plugins, though you may need to re-register the marketplace in Claude Code when adding new ones.
 
 If `CLAUDE_MARKETPLACE_PATH` is not set in `.env`, it falls back to the empty `./marketplace/` folder (no error).
+
+### Updating Claude Code
+
+Claude Code is pre-installed using Anthropic's **native installer** (not npm), per their supply-chain security guidance. The binary lives at `~/.local/bin/claude` inside the container (on the persistent home volume).
+
+**Option A — Runtime update (no rebuild; recommended for day-to-day):**
+
+```bash
+make shell
+claude update            # check for and install latest
+# — or pin a specific version —
+claude install 2.1.116   # stable | latest | <specific version>
+```
+
+Updates land in `~/.local/share/claude/versions/` and persist across `make down/up`.
+
+**Option B — Build-time pin (persists through `make nuke`):**
+
+Edit `.env`:
+
+```bash
+CLAUDE_CODE_VERSION=2.1.116   # or: stable | latest
+```
+
+Then rebuild:
+
+```bash
+make build && make up
+```
+
+**Rolling back to baked version:**
+
+```bash
+make claude-reset          # removes ~/.local/bin/claude and ~/.local/share/claude
+make build-slim && make down && make up   # rebuild to restore the baked version
+```
+
+**Health check:**
+
+```bash
+make shell
+claude doctor              # verify auto-updater health
+```
 
 ## Port Mappings
 

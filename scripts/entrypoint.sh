@@ -67,6 +67,22 @@ if [ -s "$NVM_DIR/nvm.sh" ]; then
     echo -e "${GREEN}✓${NC} Node.js $(node --version 2>/dev/null || echo 'not loaded')"
 fi
 
+# -- User-local bin (native Claude Code, persists on vol-home) --
+# Ensure the dir exists on volumes created before this change, then PATH it.
+mkdir -p "${HOME}/.local/bin"
+chown -R "${DEV_USER:-dev}:${DEV_USER:-dev}" "${HOME}/.local" 2>/dev/null || true
+
+# Symlink baked native binary if no runtime install exists.
+# - Fresh volume / post-reset: ~/.local/bin/claude absent → link to /opt/claude
+# - Runtime claude install <ver>: writes its own ~/.local/bin/claude, left alone
+# - make claude-reset removes the link → next start re-creates it (no rebuild)
+if [ -x /opt/claude/bin/claude ] && [ ! -e "${HOME}/.local/bin/claude" ]; then
+    ln -s /opt/claude/bin/claude "${HOME}/.local/bin/claude"
+    chown -h "${DEV_USER:-dev}:${DEV_USER:-dev}" "${HOME}/.local/bin/claude" 2>/dev/null || true
+fi
+
+export PATH="${HOME}/.local/bin:${PATH}"
+
 # -- .NET --
 if [ -x "/usr/local/dotnet/dotnet" ]; then
     export PATH="/usr/local/dotnet:$PATH"
@@ -176,6 +192,13 @@ elif [ -f "/home/dev/.claude/credentials.json" ] || [ -f "/home/dev/.claude/.cre
 else
     echo -e "${YELLOW}!${NC} Claude Code: No auth configured"
     echo -e "    Set ANTHROPIC_API_KEY or run: ${BLUE}claude login${NC}"
+fi
+
+# -- Active Claude Code version (resolved after PATH is set) --
+if command -v claude >/dev/null 2>&1; then
+    CLAUDE_ACTIVE_VER="$(claude --version 2>/dev/null | head -n1 || echo unknown)"
+    echo -e "${GREEN}✓${NC} Claude Code ${CLAUDE_ACTIVE_VER}"
+    echo -e "\033[2m  (native; run 'claude update' to update, 'claude install <ver>' to pin)\033[0m"
 fi
 
 # -- Claude Code Settings --

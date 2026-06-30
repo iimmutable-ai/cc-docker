@@ -34,6 +34,7 @@ services:
         INCLUDE_RUST: "true"
         INCLUDE_BROWSER: "true"
         INCLUDE_GPU: "false"
+        CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-2.1.116}"
         DEV_UID: "1000"
         DEV_GID: "1000"
         DEV_USER: "${DEV_USER:-dev}"

@@ -3,7 +3,7 @@
 # Run 'make help' to see all available commands
 # =============================================================================
 
-.PHONY: help init build build-slim build-all up down restart shell claude login \
+.PHONY: help init build build-slim build-all up down restart shell claude login claude-reset \
         solana-up mobile-up host-bind-up host-bind-mobile-up host-bind-solana-up \
         status logs clean nuke health \
         backup restore backup-list backup-clean backup-enc restore-enc \
@@ -61,6 +61,12 @@ GPU ?= false
 ifeq ($(GPU),true)
     COMPOSE_FILES += -f docker-compose.gpu.yml
 endif
+
+# Claude Code version target (override via .env or command line)
+# Accepts: stable | latest | <specific version> (e.g. 2.1.116)
+# Default: 2.1.116 (newer versions break 3rd-party LLM provider compatibility)
+# Use: make CLAUDE_CODE_VERSION=latest build
+CLAUDE_CODE_VERSION ?= 2.1.116
 
 # DinD override (use: make DIND=true up)
 # ⚠️  Mounts Docker socket — gives container full host Docker access
@@ -135,6 +141,7 @@ build: .env ## Build core image (all stacks)
 		--build-arg INCLUDE_RUST=true \
 		--build-arg INCLUDE_BROWSER=true \
 		--build-arg INCLUDE_GPU=$(GPU) \
+		--build-arg CLAUDE_CODE_VERSION=$(CLAUDE_CODE_VERSION) \
 		cc-docker
 
 build-slim: .env ## Build slim image (Node + Go only)
@@ -145,6 +152,7 @@ build-slim: .env ## Build slim image (Node + Go only)
 		--build-arg INCLUDE_RUST=false \
 		--build-arg INCLUDE_BROWSER=false \
 		--build-arg INCLUDE_GPU=false \
+		--build-arg CLAUDE_CODE_VERSION=$(CLAUDE_CODE_VERSION) \
 		cc-docker
 
 build-all: build ## Build all images including profiles
@@ -152,7 +160,15 @@ build-all: build ## Build all images including profiles
 	$(COMPOSE) --profile mobile build cc-docker-mobile
 
 build-no-cache: .env ## Build core image without cache
-	$(COMPOSE) build --no-cache cc-docker
+	$(COMPOSE) build --no-cache \
+		--build-arg INCLUDE_NODE=true \
+		--build-arg INCLUDE_DOTNET=true \
+		--build-arg INCLUDE_GOLANG=true \
+		--build-arg INCLUDE_RUST=true \
+		--build-arg INCLUDE_BROWSER=true \
+		--build-arg INCLUDE_GPU=$(GPU) \
+		--build-arg CLAUDE_CODE_VERSION=$(CLAUDE_CODE_VERSION) \
+		cc-docker
 
 # =============================================================================
 # Run
@@ -214,10 +230,13 @@ shell: .env ## Open bash shell in cc-docker
 	$(COMPOSE) exec -u dev cc-docker bash
 
 claude: .env ## Launch Claude Code CLI
-	$(COMPOSE) exec cc-docker bash -c '. /usr/local/nvm/nvm.sh && claude'
+	$(COMPOSE) exec cc-docker bash -c 'export PATH="$$HOME/.local/bin:$$PATH" && claude'
 
 login: .env ## Run Claude OAuth login
-	$(COMPOSE) exec cc-docker bash -c '. /usr/local/nvm/nvm.sh && claude login'
+	$(COMPOSE) exec cc-docker bash -c 'export PATH="$$HOME/.local/bin:$$PATH" && claude login'
+
+claude-reset: .env ## Reset Claude Code to baked version (removes runtime install)
+	$(COMPOSE) exec -u dev cc-docker bash -c 'rm -rf ~/.local/bin/claude ~/.local/share/claude && echo "Runtime Claude Code removed. Baked version will be restored on next restart: make down && make up"'
 
 gh-auth: .env ## Run 'gh auth login' interactively inside container
 	$(COMPOSE) exec cc-docker bash -c 'gh auth login'

@@ -10,6 +10,11 @@ export NVM_DIR="/usr/local/nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 
+# -- User-local bin (native Claude Code, persists on vol-home) --
+# Claude Code's native installer puts the binary at ~/.local/bin/claude.
+# Prepended AFTER nvm so it shadows any node-based fallback.
+export PATH="$HOME/.local/bin:$PATH"
+
 # -- Go --
 export GOROOT=/usr/local/go
 export GOPATH=$HOME/go
